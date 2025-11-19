@@ -18,7 +18,7 @@
 #define ERROR(fmt, ...) fprintf(stderr, "Error: " fmt "\n", ##__VA_ARGS__)
 
 static DEFINE_string(input, "", "Input .skp file");
-static DEFINE_string(output, "index.html", "Output LOG file");
+static DEFINE_string(output, ".", "Output directory");
 
 struct RecordPrinter {
     std::ostringstream os;
@@ -80,6 +80,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::string outdir = FLAGS_output[0];
+    std::string beforePath = outdir + "/before.png";
+    std::string afterPath = outdir + "/after.png";
+    std::string htmlPath = outdir + "/index.html";
+
     sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
     if (!picture) {
         ERROR("Error loading skp from %s", FLAGS_input[0]);
@@ -99,16 +104,16 @@ int main(int argc, char** argv) {
         records.visit(i, printer);
     }
 
-    drawRecordToFile(records, bounds, "before.png");
+    drawRecordToFile(records, bounds, beforePath.c_str());
 
     DrawRectRed mutator;
     for (int i = 0; i < records.count(); i++) {
         records.mutate(i, mutator);
     }
 
-    drawRecordToFile(records, bounds, "after.png");
+    drawRecordToFile(records, bounds, afterPath.c_str());
 
-    FILE* outFile = fopen(FLAGS_output[0], "w");
+    FILE* outFile = fopen(htmlPath.c_str(), "w");
     if (!outFile) {
         ERROR("Failed to open output file %s", FLAGS_output[0]);
         return 1;
