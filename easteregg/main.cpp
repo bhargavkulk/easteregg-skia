@@ -44,6 +44,7 @@ struct DrawRectRed {
             color.fR = 1.0;
             color.fG = 0.0;
             color.fB = 0.0;
+            op->paint.setColor(color.toSkColor());
         }
     }
 };
