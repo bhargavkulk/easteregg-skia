@@ -2,7 +2,6 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkPicture.h"
-#include "include/core/SkRecorder.h"
 #include "include/core/SkStream.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
@@ -12,6 +11,13 @@
 
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, "output.png", "Output PNG file");
+
+struct RecordPrinter {
+    int index = 0;
+    template <typename T> void operator()(const T& op) {
+        printf("    [%d] %s\n", index++, typeid(T).name());
+    }
+};
 
 int main(int argc, char** argv) {
     CommandLineFlags::Parse(argc, argv);

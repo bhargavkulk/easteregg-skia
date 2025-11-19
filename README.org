@@ -5,7 +5,7 @@
 * Setting up dev environment
 
 #+begin_src bash
-./bin/gn gen out/Debug/ --export-compile-commands
+./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti"]' --export-compile-commands
 #+end_src
 
 This generates a ~out/Debug/compile_commands.json~ file. You will then have to
