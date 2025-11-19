@@ -4,3 +4,5 @@ if [ ! -d "out/Debug" ]; then
 fi
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++"'
 ninja -C out/Debug easteregg
+./out/Debug/easteregg --input test.skp
+mv output.png report/output.png
