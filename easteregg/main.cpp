@@ -5,6 +5,7 @@
 #include "include/core/SkRecorder.h"
 #include "include/core/SkStream.h"
 #include "src/core/SkRecord.h"
+#include "src/core/SkRecordCanvas.h"
 #include "tools/flags/CommandLineFlags.h"
 
 #define ERROR(fmt, ...) fprintf(stderr, "Error: " fmt "\n", ##__VA_ARGS__)
@@ -34,7 +35,8 @@ int main(int argc, char** argv) {
 
     SkRect bounds(picture->cullRect());
     SkRecord records;
-    SkRecorder recorder(&records, bounds.width(), bounds.height());
+    SkRecordCanvas recorder(&records, bounds);
+
     picture->playback(&recorder);
 
     printf("Record has %d commands.\n", records.count());
