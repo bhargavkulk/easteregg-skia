@@ -1,0 +1,20 @@
+#+title:  EasterEgg
+#+date:   [2025-11-19 Wed]
+#+author: Bhargav Kulkarni
+
+* Setting up dev environment
+
+#+begin_src bash
+./bin/gn gen out/Debug/ --export-compile-commands
+#+end_src
+
+This generates a ~out/Debug/compile_commands.json~ file. You will then have to
+symlink or copy it to the root of the project.
+
+#+begin_src bash
+ln -s out/Debug/compile_commands.json compile_commands.json
+#+end_src
+
+* Where are the files?
+
+See [[file:easteregg/][./easteregg]].
