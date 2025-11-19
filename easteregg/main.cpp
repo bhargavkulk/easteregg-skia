@@ -19,7 +19,7 @@ struct RecordPrinter {
     RecordPrinter(FILE* file) : file(file) {}
 
     template <typename T> void operator()(const T& op) {
-        fprintf(file, "    [%d] %s\n", index++, typeid(T).name());
+        fprintf(file, "    [%d] %s<br />", index++, typeid(T).name());
     }
 };
 
