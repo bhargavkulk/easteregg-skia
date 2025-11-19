@@ -10,12 +10,16 @@
 #define ERROR(fmt, ...) fprintf(stderr, "Error: " fmt "\n", ##__VA_ARGS__)
 
 static DEFINE_string(input, "", "Input .skp file");
-static DEFINE_string(output, "output.png", "Output PNG file");
+static DEFINE_string(output, "index.html", "Output LOG file");
 
 struct RecordPrinter {
+    FILE* file;
     int index = 0;
+
+    RecordPrinter(FILE* file) : file(file) {}
+
     template <typename T> void operator()(const T& op) {
-        printf("    [%d] %s\n", index++, typeid(T).name());
+        fprintf(file, "    [%d] %s\n", index++, typeid(T).name());
     }
 };
 
@@ -45,7 +49,20 @@ int main(int argc, char** argv) {
 
     picture->playback(&recorder);
 
-    printf("Record has %d commands.\n", records.count());
+    printf("Record has %d commands.\n\n", records.count());
+
+    FILE* outFile = fopen(FLAGS_output[0], "w");
+    if (!outFile) {
+        ERROR("Failed to open output file %s", FLAGS_output[0]);
+        return 1;
+    }
+
+    RecordPrinter printer(outFile);
+    for (int i = 0; i < records.count(); i++) {
+        records.visit(i, printer);
+    }
+
+    fclose(outFile);
 
     return 0;
 }
