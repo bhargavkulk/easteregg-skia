@@ -58,7 +58,7 @@ struct WrapDrawRect {
 
     void operator()(const SkRecords::DrawRect& op) {
         new_record->append<SkRecords::Save>();
-        new (new_record->append<SkRecords::DrawRect>()) SkRecords::DrawRect(op);
+        *new_record->append<SkRecords::DrawRect>() = std::move(op);
         new_record->append<SkRecords::Restore>();
     }
 };
