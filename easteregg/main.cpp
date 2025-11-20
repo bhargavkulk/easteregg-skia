@@ -49,22 +49,6 @@ struct DrawRectRed {
     }
 };
 
-struct WrapDrawRect {
-    SkRecord* new_record;
-
-    WrapDrawRect(SkRecord* record) : new_record(record) {}
-
-    template <typename T> void operator()(const T& op) {
-        new (new_record->append<T>()) T(std::move(op));
-    }
-
-    void operator()(const SkRecords::DrawRect& op) {
-        new_record->append<SkRecords::Save>();
-        new (new_record->append<SkRecords::DrawRect>()) SkRecords::DrawRect(std::move(op));
-        new_record->append<SkRecords::Restore>();
-    }
-};
-
 // Draws a given SkRecord `records` into a png file named `filename`
 bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
     auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(bounds.width(), bounds.height()));
@@ -123,23 +107,17 @@ int main(int argc, char** argv) {
 
     drawRecordToFile(records, bounds, beforePath.c_str());
 
-    // DrawRectRed mutator;
-    // for (int i = 0; i < records.count(); i++) {
-    //     records.mutate(i, mutator);
-    // }
-
-    SkRecord new_record;
-    WrapDrawRect wrapper(&new_record);
+    DrawRectRed mutator;
     for (int i = 0; i < records.count(); i++) {
-        records.visit(i, wrapper);
+        records.mutate(i, mutator);
     }
 
     RecordPrinter printer2;
     for (int i = 0; i < records.count(); i++) {
-        new_record.visit(i, printer2);
+        records.visit(i, printer2);
     }
 
-    drawRecordToFile(new_record, bounds, afterPath.c_str());
+    drawRecordToFile(records, bounds, afterPath.c_str());
 
     FILE* outFile = fopen(htmlPath.c_str(), "w");
     if (!outFile) {
@@ -151,7 +129,7 @@ int main(int argc, char** argv) {
     fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
     fprintf(outFile, "<h1>Record Commands (%d total)</h1>\n", records.count());
     fprintf(outFile, "<pre>%s</pre>\n", printer.str().c_str());
-    fprintf(outFile, "<h1>Record Commands After (%d total)</h1>\n", new_record.count());
+    fprintf(outFile, "<h1>Record Commands After (%d total)</h1>\n", records.count());
     fprintf(outFile, "<pre>%s</pre>\n", printer2.str().c_str());
     fprintf(outFile, "<h1>Before Mutation</h1>\n");
     fprintf(outFile, "<img src='before.png' />\n");

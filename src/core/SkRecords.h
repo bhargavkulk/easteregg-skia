@@ -121,8 +121,8 @@ public:
     ACT_AS_PTR(fPtr)
 private:
     T* fPtr;
-    // Optional(const Optional&) = delete;
-    // Optional& operator=(const Optional&) = delete;
+    Optional(const Optional&) = delete;
+    Optional& operator=(const Optional&) = delete;
 };
 
 // PODArray doesn't own the pointer's memory, and we assume the data is POD.
