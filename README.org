@@ -18,3 +18,17 @@ ln -s out/Debug/compile_commands.json compile_commands.json
 * Where are the files?
 
 See [[file:easteregg/][./easteregg]].
+
+* What I am learning
+
+~SkRecord~ is a list of records. Its internal data structure is a [[file:include/private/base/SkTemplates.h::316][AutoTMalloc]]. A
+~AutoTMalloc~ is a contiguous dynamic array (defined as [[file:src/core/SkRecord.h::178][fRecords]]). I will call
+this a ~List~ from now on. The actaully type of the ~List~ used by ~SkRecord~ is
+~List<SkRecords*>~. ~SkRecords~ (very badly named) is the type encompassing all
+possible canvas commands in Skia API. Notice that SkRecord is a ~List~ of
+~SkRecords~ pointers and not ~SkRecords~ objects. The burden of allocation falls on
+an arena allocator (defined as [[file:src/core/SkRecord.h::182][fAlloc]]). We can allocate a pointer to a ~SkRecord~
+in ~fAlloc~ using the method [[file:src/core/SkRecord.h::62][T* alloc(size_t count)]]. Then we put whatever data we
+want in it. and then we use [[file:src/core/SkRecord.h::73][append]]. ~append~ has a very weird API, it appends a
+pointer then returns that pointer to which you refer the pointer you just
+allocated. I think.
