@@ -9,7 +9,9 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
+#define private public
 #include "src/core/SkRecord.h"
+#undef private
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
 #include "src/core/SkRecords.h"
@@ -48,6 +50,59 @@ struct DrawRectRed {
         }
     }
 };
+
+// Inserts explicit NoOps before each DrawRect by reshuffling the raw record array.
+void insertNoOpBeforeDrawRects(SkRecord* record) {
+    const int originalCount = record->count();
+
+    struct DrawRectCounter {
+        int count = 0;
+        template <typename T> void operator()(const T&) {}
+        void operator()(const SkRecords::DrawRect&) { ++count; }
+    } counter;
+
+    for (int i = 0; i < originalCount; ++i) {
+        record->visit(i, counter);
+    }
+
+    if (counter.count == 0) {
+        return;
+    }
+
+    const int newCount = originalCount + counter.count;
+
+    auto ensureCapacity = [](SkRecord* rec, int required) {
+        int reserved = rec->fReserved;
+        if (reserved >= required) {
+            return;
+        }
+        if (reserved == 0) {
+            reserved = 4;
+        }
+        while (reserved < required) {
+            reserved *= 2;
+        }
+        rec->fRecords.realloc(reserved);
+        rec->fReserved = reserved;
+    };
+
+    ensureCapacity(record, newCount);
+
+    SkRecord::Record* entries = record->fRecords.get();
+    int write = newCount - 1;
+    for (int read = originalCount - 1; read >= 0; --read) {
+        entries[write] = entries[read];
+        if (entries[write].type() == SkRecords::DrawRect_Type) {
+            --write;
+            SkRecords::NoOp* noop = record->allocCommand<SkRecords::NoOp>();
+            entries[write].set(noop);
+        }
+        --write;
+    }
+
+    SkASSERT(write == -1);
+    record->fCount = newCount;
+}
 
 // Draws a given SkRecord `records` into a png file named `filename`
 bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
@@ -105,12 +160,18 @@ int main(int argc, char** argv) {
         records.visit(i, printer);
     }
 
+    const int beforeCommandCount = records.count();
+
     drawRecordToFile(records, bounds, beforePath.c_str());
 
     DrawRectRed mutator;
     for (int i = 0; i < records.count(); i++) {
         records.mutate(i, mutator);
     }
+
+    insertNoOpBeforeDrawRects(&records);
+
+    const int afterCommandCount = records.count();
 
     RecordPrinter printer2;
     for (int i = 0; i < records.count(); i++) {
@@ -127,9 +188,9 @@ int main(int argc, char** argv) {
 
     fprintf(outFile, "<!DOCTYPE html>\n");
     fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
-    fprintf(outFile, "<h1>Record Commands (%d total)</h1>\n", records.count());
+    fprintf(outFile, "<h1>Record Commands (%d total)</h1>\n", beforeCommandCount);
     fprintf(outFile, "<pre>%s</pre>\n", printer.str().c_str());
-    fprintf(outFile, "<h1>Record Commands After (%d total)</h1>\n", records.count());
+    fprintf(outFile, "<h1>Record Commands After (%d total)</h1>\n", afterCommandCount);
     fprintf(outFile, "<pre>%s</pre>\n", printer2.str().c_str());
     fprintf(outFile, "<h1>Before Mutation</h1>\n");
     fprintf(outFile, "<img src='before.png' />\n");
