@@ -51,15 +51,17 @@ struct DrawRectRed {
     }
 };
 
+struct DrawRectCounter {
+    int count = 0;
+    void operator()(const SkRecords::DrawRect&) { ++count; }
+    template <typename T> void operator()(const T&) {}
+};
+
 // Inserts explicit NoOps before each DrawRect by reshuffling the raw record array.
 void insertNoOpBeforeDrawRects(SkRecord* record) {
     const int originalCount = record->count();
 
-    struct DrawRectCounter {
-        int count = 0;
-        template <typename T> void operator()(const T&) {}
-        void operator()(const SkRecords::DrawRect&) { ++count; }
-    } counter;
+    DrawRectCounter counter;
 
     for (int i = 0; i < originalCount; ++i) {
         record->visit(i, counter);
