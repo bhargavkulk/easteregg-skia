@@ -54,11 +54,11 @@ struct WrapDrawRect {
 
     WrapDrawRect(SkRecord* record) : new_record(record) {}
 
-    template <typename T> void operator()(const T& op) { *new_record->append<T>() = op; }
+    template <typename T> void operator()(const T& op) { new (new_record->append<T>()) T(op); }
 
     void operator()(const SkRecords::DrawRect& op) {
         new_record->append<SkRecords::Save>();
-        *new_record->append<SkRecords::DrawRect>() = op;
+        new (new_record->append<SkRecords::DrawRect>()) SkRecords::DrawRect(op);
         new_record->append<SkRecords::Restore>();
     }
 };
