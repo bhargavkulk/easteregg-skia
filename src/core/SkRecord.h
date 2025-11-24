@@ -14,6 +14,7 @@
 #include "src/base/SkArenaAlloc.h"
 #include "src/core/SkRecords.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <type_traits>
 
@@ -85,7 +86,7 @@ public:
         return fRecords[i].set(this->allocCommand<T>());
     }
 
-    template <typename T> T* insert(int index) {
+    template <typename T> T* insertHere(int index) {
         SkASSERT(index < this->count());
 
         if (fCount == fReserved) {
@@ -101,6 +102,44 @@ public:
         fRecords[index].set(command);
         fCount += 1;
         return command;
+    }
+
+    template <typename T> T* insert(int index) {
+        SkASSERT(0 <= index && index <= fCount);
+        Insertion insertion;
+        insertion.index = index;
+        T* command = this->allocCommand<T>();
+        insertion.record.set(command);
+        return command;
+    }
+
+    void executeInsertions() {
+        if (fInsertionSet.empty()) {
+            return;
+        }
+
+        std::sort(fInsertionSet.begin(),
+                  fInsertionSet.end(),
+                  [](const Insertion& a, const Insertion& b) { return a.index < b.index; });
+
+        int old_length = fCount;
+        int num_insertions = fInsertionSet.size();
+        int new_length = old_length + num_insertions;
+        fRecords.realloc(new_length);
+        int last_written_idx = new_length;
+
+        for (int i = num_insertions - 1; i >= 0; --i) {
+            Insertion insertion = fInsertionSet[i];
+            int insertions_left = i;
+            int final_idx = insertion.index + insertions_left;
+
+            for (int j = last_written_idx - 1; j >= final_idx + 1; j++) {
+                fRecords[j] = fRecords[j - insertions_left - 1];
+            }
+
+            fRecords[final_idx] = insertion.record;
+            fInsertionSet.reset(0);
+        }
     }
 
     // Does not return the bytes in any pointers embedded in the Records; callers
@@ -190,8 +229,15 @@ private:
     int fCount{0}, fReserved{0};
     skia_private::AutoTMalloc<Record> fRecords;
 
-    // fAlloc needs to be a data structure which can append variable length data in contiguous
-    // chunks, returning a stable handle to that data for later retrieval.
+    // Insertion Set
+    struct Insertion {
+        size_t index;
+        Record record;
+    };
+    skia_private::STArray<8, Insertion> fInsertionSet;
+
+    // fAlloc needs to be a data structure which can append variable length data in
+    // contiguous chunks, returning a stable handle to that data for later retrieval.
     SkArenaAlloc fAlloc{256};
     size_t fApproxBytesAllocated{0};
 };

@@ -62,9 +62,10 @@ void insertNoOpBeforeDrawRects(SkRecord* record) {
         if (detector.isDrawRect) {
             record->insert<SkRecords::Restore>(i + 1);
             record->insert<SkRecords::Save>(i);
-            i += 2;
         }
     }
+
+    record->executeInsertions();
 }
 
 // Draws a given SkRecord `records` into a png file named `filename`
