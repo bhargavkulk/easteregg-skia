@@ -110,6 +110,7 @@ public:
         insertion.index = index;
         T* command = this->allocCommand<T>();
         insertion.record.set(command);
+        fInsertionSet.push_back(insertion);
         return command;
     }
 
