@@ -31,4 +31,6 @@ an arena allocator (defined as [[file:src/core/SkRecord.h::182][fAlloc]]). We ca
 in ~fAlloc~ using the method [[file:src/core/SkRecord.h::62][T* alloc(size_t count)]]. Then we put whatever data we
 want in it. and then we use [[file:src/core/SkRecord.h::73][append]]. ~append~ has a very weird API, it appends a
 pointer then returns that pointer to which you refer the pointer you just
-allocated. I think.
+allocated. I think. Actually ~append~ calls alloc, which is very confusing.
+
+codex resume 019aa391-74aa-79b2-affb-0e5fa86a9c46

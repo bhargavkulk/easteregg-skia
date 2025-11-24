@@ -51,59 +51,21 @@ struct DrawRectRed {
     }
 };
 
-struct DrawRectCounter {
-    int count = 0;
-    void operator()(const SkRecords::DrawRect&) { ++count; }
+struct DrawRectDetector {
+    bool isDrawRect = false;
+    void operator()(const SkRecords::DrawRect&) { isDrawRect = true; }
     template <typename T> void operator()(const T&) {}
 };
 
-// Inserts explicit NoOps before each DrawRect by reshuffling the raw record array.
 void insertNoOpBeforeDrawRects(SkRecord* record) {
-    const int originalCount = record->count();
-
-    DrawRectCounter counter;
-
-    for (int i = 0; i < originalCount; ++i) {
-        record->visit(i, counter);
+    for (int i = 0; i < record->count(); ++i) {
+        DrawRectDetector detector;
+        record->visit(i, detector);
+        if (detector.isDrawRect) {
+            record->insert<SkRecords::NoOp>(i);
+            ++i;  // Skip the inserted NoOp and the DrawRect we just handled.
+        }
     }
-
-    if (counter.count == 0) {
-        return;
-    }
-
-    const int newCount = originalCount + counter.count;
-
-    auto ensureCapacity = [](SkRecord* rec, int required) {
-        int reserved = rec->fReserved;
-        if (reserved >= required) {
-            return;
-        }
-        if (reserved == 0) {
-            reserved = 4;
-        }
-        while (reserved < required) {
-            reserved *= 2;
-        }
-        rec->fRecords.realloc(reserved);
-        rec->fReserved = reserved;
-    };
-
-    ensureCapacity(record, newCount);
-
-    SkRecord::Record* entries = record->fRecords.get();
-    int write = newCount - 1;
-    for (int read = originalCount - 1; read >= 0; --read) {
-        entries[write] = entries[read];
-        if (entries[write].type() == SkRecords::DrawRect_Type) {
-            --write;
-            SkRecords::NoOp* noop = record->allocCommand<SkRecords::NoOp>();
-            entries[write].set(noop);
-        }
-        --write;
-    }
-
-    SkASSERT(write == -1);
-    record->fCount = newCount;
 }
 
 // Draws a given SkRecord `records` into a png file named `filename`
