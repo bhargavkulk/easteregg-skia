@@ -138,8 +138,9 @@ public:
             }
 
             fRecords[final_idx] = insertion.record;
-            fInsertionSet.reset(0);
         }
+        fCount = new_length;
+        fInsertionSet.reset(0);
     }
 
     // Does not return the bytes in any pointers embedded in the Records; callers
