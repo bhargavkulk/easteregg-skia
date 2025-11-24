@@ -9,9 +9,7 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
-#define private public
 #include "src/core/SkRecord.h"
-#undef private
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
 #include "src/core/SkRecords.h"
@@ -62,8 +60,9 @@ void insertNoOpBeforeDrawRects(SkRecord* record) {
         DrawRectDetector detector;
         record->visit(i, detector);
         if (detector.isDrawRect) {
-            record->insert<SkRecords::NoOp>(i);
-            ++i;  // Skip the inserted NoOp and the DrawRect we just handled.
+            record->insert<SkRecords::Restore>(i + 1);
+            record->insert<SkRecords::Save>(i);
+            i += 2;
         }
     }
 }
