@@ -139,6 +139,7 @@ public:
             }
 
             fRecords[final_idx] = insertion.record;
+            last_written_idx = final_idx;
         }
         fCount = new_length;
         fInsertionSet.reset(0);
