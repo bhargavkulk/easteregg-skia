@@ -118,29 +118,29 @@ public:
         if (fInsertionSet.empty()) {
             return;
         }
-
         std::sort(fInsertionSet.begin(),
                   fInsertionSet.end(),
                   [](const Insertion& a, const Insertion& b) { return a.index < b.index; });
 
-        int old_length = fCount;
-        int num_insertions = fInsertionSet.size();
-        int new_length = old_length + num_insertions;
+        const int old_length = fCount;
+        const int num_insertions = fInsertionSet.size();
+        const int new_length = old_length + num_insertions;
         fRecords.realloc(new_length);
+        fReserved = new_length;  // keep the capacity bookkeeping in sync
+
         int last_written_idx = new_length;
-
         for (int i = num_insertions - 1; i >= 0; --i) {
-            Insertion insertion = fInsertionSet[i];
-            int insertions_left = i;
-            int final_idx = insertion.index + insertions_left;
+            const int shift_amount = i + 1;  // insertions still to place, incl. this one
+            const int final_idx = SkToInt(fInsertionSet[i].index) + i;
 
-            for (int j = last_written_idx - 1; j >= final_idx + 1; j++) {
-                fRecords[j] = fRecords[j - insertions_left - 1];
+            for (int j = last_written_idx - 1; j >= final_idx + 1; --j) {
+                fRecords[j] = fRecords[j - shift_amount];
             }
 
-            fRecords[final_idx] = insertion.record;
+            fRecords[final_idx] = fInsertionSet[i].record;
             last_written_idx = final_idx;
         }
+
         fCount = new_length;
         fInsertionSet.reset(0);
     }
