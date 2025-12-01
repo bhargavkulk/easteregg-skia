@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <sstream>
 #include <stack>
+#include <tuple>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkImage.h"
@@ -35,7 +36,7 @@ bool isPaintPlain(SkPaint* paint) {
 
 struct RemoveOpaqueSaveLayers {
     std::stringstream log;
-    std::stack<int> back_indices;
+    std::stack<std::tuple<bool, int>> back_indices;
     SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
     SkRecords::Is<SkRecords::Save> isSave;
     SkRecords::Is<SkRecords::Restore> isRestore;
@@ -44,15 +45,16 @@ struct RemoveOpaqueSaveLayers {
     void transform(SkRecord& records) {
         for (int i = 0; i < records.count(); i++) {
             if (records.mutate(i, isSaveLayer) && isPaintPlain(isSaveLayer.get()->paint)) {
-                back_indices.push(i);
+                back_indices.emplace(true, i);
                 log << "SaveLayer @ " << i << '\n';
             } else if (records.mutate(i, isSave)) {
-                back_indices.push(i);
+                back_indices.emplace(false, i);
                 log << "Save @ " << i << '\n';
             } else if (records.mutate(i, isRestore)) {
-                int bi = back_indices.top();
+                auto [is, bi] = back_indices.top();
                 back_indices.pop();
-                log << "Restore @ " << i << " -> " << bi << '\n';
+                log << "Restore @ " << i << " -> " << (is ? "SaveLayer" : "Save") << " @ " << bi
+                    << '\n';
             }
         }
     }
