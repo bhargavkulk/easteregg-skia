@@ -24,6 +24,15 @@
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
 
+bool isPaintPlain(SkPaint* paint) {
+    if (paint->getShader() || paint->getColorFilter() || paint->getImageFilter() ||
+        paint->getMaskFilter()) {
+        return false;
+    }
+
+    return paint->isSrcOver() and (paint->getAlphaf() == 1.0);
+}
+
 struct RemoveOpaqueSaveLayers {
     std::stringstream log;
     std::stack<int> back_indices;
@@ -34,7 +43,7 @@ struct RemoveOpaqueSaveLayers {
 
     void transform(SkRecord& records) {
         for (int i = 0; i < records.count(); i++) {
-            if (records.mutate(i, isSaveLayer)) {
+            if (records.mutate(i, isSaveLayer) && isPaintPlain(isSaveLayer.get()->paint)) {
                 back_indices.push(i);
                 log << "SaveLayer @ " << i << '\n';
             } else if (records.mutate(i, isSave)) {
