@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <sstream>
+#include <vector>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkImage.h"
@@ -19,6 +20,51 @@
 
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
+
+// Loops through the SkRecord searching for SaveLayers. When a SaveLayer is
+// seen, push its index on to the back_indices vector. Also log it in the
+// stringstream. When a restore is seen pop the index from back_indices and
+// then log which index the restore points to along with its own index in
+// the string stream.
+// codex resume 019adb66-604a-7fc2-8bec-dd2f1d1d7c0d
+template <typename Command> struct CommandDetector {
+    bool matched = false;
+    void operator()(const Command&) { matched = true; }
+    template <typename T> void operator()(const T&) {}
+};
+
+struct RemoveOpaqueSaveLayers {
+    std::vector<size_t> back_indices;
+    std::ostringstream log;
+
+    void transform(SkRecord& record) {
+        back_indices.clear();
+        log.str("");
+        log.clear();
+
+        for (int i = 0; i < record.count(); ++i) {
+            CommandDetector<SkRecords::SaveLayer> saveDetector;
+            record.visit(i, saveDetector);
+            if (saveDetector.matched) {
+                back_indices.push_back(i);
+                log << "SaveLayer[" << i << "]\n";
+                continue;
+            }
+
+            CommandDetector<SkRecords::Restore> restoreDetector;
+            record.visit(i, restoreDetector);
+            if (restoreDetector.matched) {
+                if (back_indices.empty()) {
+                    log << "Restore[" << i << "] has no matching SaveLayer\n";
+                    continue;
+                }
+                const size_t saveLayerIndex = back_indices.back();
+                back_indices.pop_back();
+                log << "Restore[" << i << "] -> SaveLayer[" << saveLayerIndex << "]\n";
+            }
+        }
+    }
+};
 
 struct RecordPrinter {
     std::ostringstream os;
@@ -49,26 +95,21 @@ struct DrawRectRed {
     }
 };
 
-struct DrawRectDetector {
-    bool isDrawRect = false;
-    void operator()(const SkRecords::DrawRect&) { isDrawRect = true; }
-    template <typename T> void operator()(const T&) {}
-};
+using DrawRectDetector = CommandDetector<SkRecords::DrawRect>;
 
 void insertNoOpBeforeDrawRects(SkRecord* record) {
     for (int i = 0; i < record->count(); ++i) {
         DrawRectDetector detector;
         record->visit(i, detector);
         if (detector.isDrawRect) {
-            record->insert<SkRecords::Restore>(i + 1);
             record->insert<SkRecords::Save>(i);
+            record->insert<SkRecords::Restore>(i + 1);
         }
     }
 
     record->executeInsertions();
 }
 
-// Draws a given SkRecord `records` into a png file named `filename`
 bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
     auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(bounds.width(), bounds.height()));
 

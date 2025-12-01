@@ -86,24 +86,9 @@ public:
         return fRecords[i].set(this->allocCommand<T>());
     }
 
-    template <typename T> T* insertHere(int index) {
-        SkASSERT(index < this->count());
-
-        if (fCount == fReserved) {
-            this->grow();
-        }
-
-        // Move all elements to the right
-        for (int i = fCount; i > index; --i) {
-            fRecords[i] = fRecords[i - 1];
-        }
-
-        T* command = allocCommand<T>();
-        fRecords[index].set(command);
-        fCount += 1;
-        return command;
-    }
-
+    // Inserts a Record of type T at index i. This insertion only happens when
+    // you call SkRecord::executeInsertions(). The index always refers to the
+    // index of the array pre *any* insertions.
     template <typename T> T* insert(int index) {
         SkASSERT(0 <= index && index <= fCount);
         Insertion insertion;
@@ -114,6 +99,8 @@ public:
         return command;
     }
 
+    // Inserts all insertions in fInsertionSet into the array. Amortizes the
+    // cost of each insertion in fInsertionSet
     void executeInsertions() {
         if (fInsertionSet.empty()) {
             return;
@@ -126,11 +113,11 @@ public:
         const int num_insertions = fInsertionSet.size();
         const int new_length = old_length + num_insertions;
         fRecords.realloc(new_length);
-        fReserved = new_length;  // keep the capacity bookkeeping in sync
+        fReserved = new_length;
 
         int last_written_idx = new_length;
         for (int i = num_insertions - 1; i >= 0; --i) {
-            const int shift_amount = i + 1;  // insertions still to place, incl. this one
+            const int shift_amount = i + 1;
             const int final_idx = SkToInt(fInsertionSet[i].index) + i;
 
             for (int j = last_written_idx - 1; j >= final_idx + 1; --j) {
