@@ -1,5 +1,7 @@
+#include <cstddef>
 #include <cstdio>
 #include <sstream>
+#include <stack>
 #include <vector>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
@@ -14,6 +16,7 @@
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
+#include "src/core/SkRecordPattern.h"
 #include "src/core/SkRecords.h"
 #include "tools/flags/CommandLineFlags.h"
 
@@ -22,84 +25,26 @@
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
 
-template <typename Command> struct CommandDetector {
-    const Command* op = nullptr;
-    void operator()(const Command& command) { op = &command; }
-    template <typename T> void operator()(const T&) {}
-};
-
-bool shouldTrackSaveLayer(const SkRecords::SaveLayer& command) {
-    if (!command.paint) {
-        return false;
-    }
-
-    const SkPaint& paint = *command.paint;
-    if (!paint.isSrcOver()) {
-        return false;
-    }
-
-    if (paint.getAlpha() != 255) {
-        return false;
-    }
-
-    if (paint.getShader() || paint.getColorFilter() || paint.getImageFilter() ||
-        paint.getMaskFilter()) {
-        return false;
-    }
-
-    return true;
-}
-
-// Loops through the SkRecord searching for SaveLayers. When a SaveLayer with an
-// opaque SrcOver paint and no filters is seen, push its index on to a stack and
-// log it. When a restore is seen pop the entry from the stack and log which
-// SaveLayer it targeted.
 struct RemoveOpaqueSaveLayers {
-    struct StackEntry {
-        bool isSaveLayer;
-        size_t index;
-    };
+    std::stringstream log;
+    std::stack<int> back_indices;
+    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    SkRecords::Is<SkRecords::Save> isSave;
+    SkRecords::Is<SkRecords::Restore> isRestore;
+    SkRecords::IsSingleDraw isDraw;
 
-    std::vector<StackEntry> stack;
-    std::ostringstream log;
-
-    void transform(SkRecord& record) {
-        stack.clear();
-        log.str("");
-        log.clear();
-
-        for (int i = 0; i < record.count(); ++i) {
-            CommandDetector<SkRecords::SaveLayer> saveLayerDetector;
-            record.visit(i, saveLayerDetector);
-            if (saveLayerDetector.op) {
-                const bool trackable = shouldTrackSaveLayer(*saveLayerDetector.op);
-                stack.push_back({trackable, trackable ? static_cast<size_t>(i) : 0});
-                if (trackable) {
-                    log << "SaveLayer[" << i << "]\n";
-                }
-                continue;
-            }
-
-            CommandDetector<SkRecords::Save> saveDetector;
-            record.visit(i, saveDetector);
-            if (saveDetector.op) {
-                stack.push_back({false, 0});
-                continue;
-            }
-
-            CommandDetector<SkRecords::Restore> restoreDetector;
-            record.visit(i, restoreDetector);
-            if (restoreDetector.op) {
-                if (stack.empty()) {
-                    log << "Restore[" << i << "] has no matching SaveLayer\n";
-                    continue;
-                }
-                const StackEntry entry = stack.back();
-                stack.pop_back();
-                if (entry.isSaveLayer) {
-                    log << "Restore[" << i << "] -> SaveLayer[" << entry.index << "]\n";
-                }
-                continue;
+    void transform(SkRecord& records) {
+        for (int i = 0; i < records.count(); i++) {
+            if (records.mutate(i, isSaveLayer)) {
+                back_indices.push(i);
+                log << "SaveLayer @ " << i << '\n';
+            } else if (records.mutate(i, isSave)) {
+                back_indices.push(i);
+                log << "Save @ " << i << '\n';
+            } else if (records.mutate(i, isRestore)) {
+                int bi = back_indices.top();
+                back_indices.pop();
+                log << "Restore @ " << i << " -> " << bi << '\n'
             }
         }
     }

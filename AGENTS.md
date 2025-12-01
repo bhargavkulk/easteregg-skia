@@ -33,8 +33,9 @@ and security-sensitive actions to me.
 
 ## Safety & Guardrails
 
-- Only ever add code to the folder `./easteregg`. NEVER CHANGE CODE IN MAINLINE
-  SKIA.
+- The main development folder is `./easteregg`. If you ever want to edit code
+  outside of `./easteregg/` i.e. edit code within skia and permission to do so
+  has not been explicitly given, ask.
 
 ## Communication
 
