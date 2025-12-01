@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <sstream>
 #include <stack>
-#include <vector>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkImage.h"
@@ -44,7 +43,7 @@ struct RemoveOpaqueSaveLayers {
             } else if (records.mutate(i, isRestore)) {
                 int bi = back_indices.top();
                 back_indices.pop();
-                log << "Restore @ " << i << " -> " << bi << '\n'
+                log << "Restore @ " << i << " -> " << bi << '\n';
             }
         }
     }
