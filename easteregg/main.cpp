@@ -26,7 +26,6 @@ static DEFINE_string(output, ".", "Output directory");
 // stringstream. When a restore is seen pop the index from back_indices and
 // then log which index the restore points to along with its own index in
 // the string stream.
-// codex resume 019adb66-604a-7fc2-8bec-dd2f1d1d7c0d
 template <typename Command> struct CommandDetector {
     bool matched = false;
     void operator()(const Command&) { matched = true; }
@@ -64,6 +63,8 @@ struct RemoveOpaqueSaveLayers {
             }
         }
     }
+
+    std::string str() const { return log.str(); }
 };
 
 struct RecordPrinter {
@@ -76,39 +77,6 @@ struct RecordPrinter {
 
     std::string str() const { return os.str(); }
 };
-
-struct DrawRectRed {
-    template <typename T> void operator()(T* op) {
-        // Do nothing for anything other than DrawRect
-    }
-
-    void operator()(SkRecords::DrawRect* op) {
-        auto& paint = op->paint;
-        if (!paint.getShader() && !paint.getColorFilter() && !paint.getImageFilter() &&
-            !paint.getMaskFilter()) {
-            SkColor4f color = op->paint.getColor4f();
-            color.fR = 1.0;
-            color.fG = 0.0;
-            color.fB = 0.0;
-            op->paint.setColor(color.toSkColor());
-        }
-    }
-};
-
-using DrawRectDetector = CommandDetector<SkRecords::DrawRect>;
-
-void insertNoOpBeforeDrawRects(SkRecord* record) {
-    for (int i = 0; i < record->count(); ++i) {
-        DrawRectDetector detector;
-        record->visit(i, detector);
-        if (detector.isDrawRect) {
-            record->insert<SkRecords::Save>(i);
-            record->insert<SkRecords::Restore>(i + 1);
-        }
-    }
-
-    record->executeInsertions();
-}
 
 bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
     auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(bounds.width(), bounds.height()));
@@ -143,7 +111,6 @@ int main(int argc, char** argv) {
 
     std::string outdir = FLAGS_output[0];
     std::string beforePath = outdir + "/before.png";
-    std::string afterPath = outdir + "/after.png";
     std::string htmlPath = outdir + "/index.html";
 
     sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
@@ -169,21 +136,8 @@ int main(int argc, char** argv) {
 
     drawRecordToFile(records, bounds, beforePath.c_str());
 
-    DrawRectRed mutator;
-    for (int i = 0; i < records.count(); i++) {
-        records.mutate(i, mutator);
-    }
-
-    insertNoOpBeforeDrawRects(&records);
-
-    const int afterCommandCount = records.count();
-
-    RecordPrinter printer2;
-    for (int i = 0; i < records.count(); i++) {
-        records.visit(i, printer2);
-    }
-
-    drawRecordToFile(records, bounds, afterPath.c_str());
+    RemoveOpaqueSaveLayers logger;
+    logger.transform(records);
 
     FILE* outFile = fopen(htmlPath.c_str(), "w");
     if (!outFile) {
@@ -195,12 +149,10 @@ int main(int argc, char** argv) {
     fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
     fprintf(outFile, "<h1>Record Commands (%d total)</h1>\n", beforeCommandCount);
     fprintf(outFile, "<pre>%s</pre>\n", printer.str().c_str());
-    fprintf(outFile, "<h1>Record Commands After (%d total)</h1>\n", afterCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", printer2.str().c_str());
-    fprintf(outFile, "<h1>Before Mutation</h1>\n");
+    fprintf(outFile, "<h1>SaveLayer / Restore Log</h1>\n");
+    fprintf(outFile, "<pre>%s</pre>\n", logger.str().c_str());
+    fprintf(outFile, "<h1>Record Snapshot</h1>\n");
     fprintf(outFile, "<img src='before.png' />\n");
-    fprintf(outFile, "<h1>After Mutation</h1>\n");
-    fprintf(outFile, "<img src='after.png' />\n");
     fprintf(outFile, "</body></html>\n");
 
     fclose(outFile);
