@@ -33,33 +33,48 @@ template <typename Command> struct CommandDetector {
 };
 
 struct RemoveOpaqueSaveLayers {
-    std::vector<size_t> back_indices;
+    struct StackEntry {
+        bool isSaveLayer;
+        size_t index;
+    };
+
+    std::vector<StackEntry> stack;
     std::ostringstream log;
 
     void transform(SkRecord& record) {
-        back_indices.clear();
+        stack.clear();
         log.str("");
         log.clear();
 
         for (int i = 0; i < record.count(); ++i) {
-            CommandDetector<SkRecords::SaveLayer> saveDetector;
+            CommandDetector<SkRecords::SaveLayer> saveLayerDetector;
+            record.visit(i, saveLayerDetector);
+            if (saveLayerDetector.matched) {
+                stack.push_back({true, static_cast<size_t>(i)});
+                log << "SaveLayer[" << i << "]\n";
+                continue;
+            }
+
+            CommandDetector<SkRecords::Save> saveDetector;
             record.visit(i, saveDetector);
             if (saveDetector.matched) {
-                back_indices.push_back(i);
-                log << "SaveLayer[" << i << "]\n";
+                stack.push_back({false, 0});
                 continue;
             }
 
             CommandDetector<SkRecords::Restore> restoreDetector;
             record.visit(i, restoreDetector);
             if (restoreDetector.matched) {
-                if (back_indices.empty()) {
+                if (stack.empty()) {
                     log << "Restore[" << i << "] has no matching SaveLayer\n";
                     continue;
                 }
-                const size_t saveLayerIndex = back_indices.back();
-                back_indices.pop_back();
-                log << "Restore[" << i << "] -> SaveLayer[" << saveLayerIndex << "]\n";
+                const StackEntry entry = stack.back();
+                stack.pop_back();
+                if (entry.isSaveLayer) {
+                    log << "Restore[" << i << "] -> SaveLayer[" << entry.index << "]\n";
+                }
+                continue;
             }
         }
     }
