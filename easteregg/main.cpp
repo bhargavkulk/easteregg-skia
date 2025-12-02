@@ -52,6 +52,12 @@ struct RemoveOpaqueSaveLayers {
                                      i);
             } else if (records.mutate(i, isSave)) {
                 back_indices.emplace(MatchState::Ignore, i);
+            } else if (records.mutate(i, isDraw)) {
+                if (std::get<0>(back_indices.top()) == MatchState::Ignore) continue;
+                if (!isPaintPlain(isDraw.get())) {
+                    auto [state, bi] = back_indices.top();
+                    back_indices.emplace(MatchState::Ignore, bi);
+                }
             } else if (records.mutate(i, isRestore)) {
                 auto [state, bi] = back_indices.top();
                 back_indices.pop();
