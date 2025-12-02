@@ -133,17 +133,26 @@ int main(int argc, char** argv) {
 
     printf("Record has %d commands.\n\n", records.count());
 
-    RecordPrinter printer;
+    RecordPrinter printerBefore;
     for (int i = 0; i < records.count(); i++) {
-        records.visit(i, printer);
+        records.visit(i, printerBefore);
     }
 
     const int beforeCommandCount = records.count();
+    const std::string beforeCommands = printerBefore.str();
 
     drawRecordToFile(records, bounds, beforePath.c_str());
 
     RemoveOpaqueSaveLayers logger;
     logger.transform(records);
+
+    RecordPrinter printerAfter;
+    for (int i = 0; i < records.count(); i++) {
+        records.visit(i, printerAfter);
+    }
+
+    const int afterCommandCount = records.count();
+    const std::string afterCommands = printerAfter.str();
 
     drawRecordToFile(records, bounds, afterPath.c_str());
 
@@ -155,8 +164,10 @@ int main(int argc, char** argv) {
 
     fprintf(outFile, "<!DOCTYPE html>\n");
     fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
-    fprintf(outFile, "<h1>Record Commands (%d total)</h1>\n", beforeCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", printer.str().c_str());
+    fprintf(outFile, "<h1>Record Commands Before Transform (%d total)</h1>\n", beforeCommandCount);
+    fprintf(outFile, "<pre>%s</pre>\n", beforeCommands.c_str());
+    fprintf(outFile, "<h1>Record Commands After Transform (%d total)</h1>\n", afterCommandCount);
+    fprintf(outFile, "<pre>%s</pre>\n", afterCommands.c_str());
     fprintf(outFile, "<h1>SaveLayer / Restore Log</h1>\n");
     fprintf(outFile, "<pre>%s</pre>\n", logger.str().c_str());
     fprintf(outFile, "<h1>Record Snapshots</h1>\n");
