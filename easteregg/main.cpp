@@ -36,25 +36,28 @@ bool isPaintPlain(SkPaint* paint) {
 
 struct RemoveOpaqueSaveLayers {
     std::stringstream log;
-    std::stack<std::tuple<bool, int>> back_indices;
     SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
     SkRecords::Is<SkRecords::Save> isSave;
     SkRecords::Is<SkRecords::Restore> isRestore;
     SkRecords::IsSingleDraw isDraw;
 
+    enum class MatchState { Matching, Ignore };
+    std::stack<std::tuple<MatchState, int>> back_indices;
+
     void transform(SkRecord& records) {
         for (int i = 0; i < records.count(); i++) {
-            if (records.mutate(i, isSaveLayer) && isPaintPlain(isSaveLayer.get()->paint)) {
-                back_indices.emplace(true, i);
+            if (records.mutate(i, isSaveLayer)) {
+                back_indices.emplace(MatchState::Matching, i);
                 log << "SaveLayer @ " << i << '\n';
             } else if (records.mutate(i, isSave)) {
-                back_indices.emplace(false, i);
+                back_indices.emplace(MatchState::Ignore, i);
                 log << "Save @ " << i << '\n';
             } else if (records.mutate(i, isRestore)) {
-                auto [is, bi] = back_indices.top();
+                auto [state, bi] = back_indices.top();
                 back_indices.pop();
-                log << "Restore @ " << i << " -> " << (is ? "SaveLayer" : "Save") << " @ " << bi
-                    << '\n';
+                if (state == MatchState::Matching) {
+                    log << "Matched! SaveLayer @ " << bi << "and Restore @ " << i << '\n';
+                }
             }
         }
     }
