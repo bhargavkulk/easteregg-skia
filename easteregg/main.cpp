@@ -56,6 +56,7 @@ struct RemoveOpaqueSaveLayers {
                 auto [state, bi] = back_indices.top();
                 back_indices.pop();
                 if (state == MatchState::Matching) {
+                    records.replace<SkRecords::Save>(bi);
                     log << "Matched! SaveLayer @ " << bi << " and Restore @ " << i << '\n';
                 }
             }
@@ -109,6 +110,7 @@ int main(int argc, char** argv) {
 
     std::string outdir = FLAGS_output[0];
     std::string beforePath = outdir + "/before.png";
+    std::string afterPath = outdir + "/after.png";
     std::string htmlPath = outdir + "/index.html";
 
     sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
@@ -137,6 +139,8 @@ int main(int argc, char** argv) {
     RemoveOpaqueSaveLayers logger;
     logger.transform(records);
 
+    drawRecordToFile(records, bounds, afterPath.c_str());
+
     FILE* outFile = fopen(htmlPath.c_str(), "w");
     if (!outFile) {
         ERROR("Failed to open output file %s", FLAGS_output[0]);
@@ -149,8 +153,9 @@ int main(int argc, char** argv) {
     fprintf(outFile, "<pre>%s</pre>\n", printer.str().c_str());
     fprintf(outFile, "<h1>SaveLayer / Restore Log</h1>\n");
     fprintf(outFile, "<pre>%s</pre>\n", logger.str().c_str());
-    fprintf(outFile, "<h1>Record Snapshot</h1>\n");
-    fprintf(outFile, "<img src='before.png' />\n");
+    fprintf(outFile, "<h1>Record Snapshots</h1>\n");
+    fprintf(outFile, "<h2>Before</h2><img src='before.png' />\n");
+    fprintf(outFile, "<h2>After</h2><img src='after.png' />\n");
     fprintf(outFile, "</body></html>\n");
 
     fclose(outFile);
