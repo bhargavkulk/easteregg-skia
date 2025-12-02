@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <sstream>
 #include <stack>
+#include <string>
 #include <tuple>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
@@ -77,7 +78,7 @@ struct RecordPrinter {
     int index = 0;
 
     template <typename T> void operator()(const T& op) {
-        os << "    [" << index++ << "] " << typeid(T).name() << "<br />\n";
+        os << "    [" << index++ << "] " << typeid(T).name() << '\n';
     }
 
     std::string str() const { return os.str(); }
@@ -117,7 +118,7 @@ int main(int argc, char** argv) {
     std::string outdir = FLAGS_output[0];
     std::string beforePath = outdir + "/before.png";
     std::string afterPath = outdir + "/after.png";
-    std::string htmlPath = outdir + "/index.html";
+    std::string dataPath = outdir + "/report_data.txt";
 
     sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
     if (!picture) {
@@ -153,29 +154,27 @@ int main(int argc, char** argv) {
 
     const int afterCommandCount = records.count();
     const std::string afterCommands = printerAfter.str();
+    const std::string saveLayerLog = logger.str();
 
     drawRecordToFile(records, bounds, afterPath.c_str());
 
-    FILE* outFile = fopen(htmlPath.c_str(), "w");
-    if (!outFile) {
-        ERROR("Failed to open output file %s", FLAGS_output[0]);
+    FILE* dataFile = fopen(dataPath.c_str(), "w");
+    if (!dataFile) {
+        ERROR("Failed to open output file %s", dataPath.c_str());
         return 1;
     }
 
-    fprintf(outFile, "<!DOCTYPE html>\n");
-    fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
-    fprintf(outFile, "<h1>Record Commands Before Transform (%d total)</h1>\n", beforeCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", beforeCommands.c_str());
-    fprintf(outFile, "<h1>Record Commands After Transform (%d total)</h1>\n", afterCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", afterCommands.c_str());
-    fprintf(outFile, "<h1>SaveLayer / Restore Log</h1>\n");
-    fprintf(outFile, "<pre>%s</pre>\n", logger.str().c_str());
-    fprintf(outFile, "<h1>Record Snapshots</h1>\n");
-    fprintf(outFile, "<h2>Before</h2><img src='before.png' />\n");
-    fprintf(outFile, "<h2>After</h2><img src='after.png' />\n");
-    fprintf(outFile, "</body></html>\n");
+    fprintf(dataFile, "before_count:%d\n", beforeCommandCount);
+    fprintf(dataFile, "after_count:%d\n", afterCommandCount);
+    fprintf(dataFile, "-----BEGIN BEFORE COMMANDS-----\n%.*s-----END BEFORE COMMANDS-----\n",
+            static_cast<int>(beforeCommands.size()), beforeCommands.c_str());
+    fprintf(dataFile, "-----BEGIN AFTER COMMANDS-----\n%.*s-----END AFTER COMMANDS-----\n",
+            static_cast<int>(afterCommands.size()), afterCommands.c_str());
+    fprintf(dataFile, "-----BEGIN SAVE_LAYER_LOG-----\n%.*s-----END SAVE_LAYER_LOG-----\n",
+            static_cast<int>(saveLayerLog.size()), saveLayerLog.c_str());
+    fclose(dataFile);
 
-    fclose(outFile);
+    printf("Wrote report data to %s\n", dataPath.c_str());
 
     return 0;
 }
