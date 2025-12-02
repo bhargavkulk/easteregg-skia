@@ -25,13 +25,13 @@
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
 
-bool isPaintPlain(SkPaint* paint) {
+bool isPaintPlain(SkPaint* paint, bool testForOpaque = true) {
     if (paint->getShader() || paint->getColorFilter() || paint->getImageFilter() ||
         paint->getMaskFilter()) {
         return false;
     }
 
-    return paint->isSrcOver() and (paint->getAlphaf() == 1.0);
+    return (testForOpaque ? paint->getAlphaf() == 1.0 : true) && paint->isSrcOver();
 }
 
 struct RemoveOpaqueSaveLayers {
@@ -47,16 +47,16 @@ struct RemoveOpaqueSaveLayers {
     void transform(SkRecord& records) {
         for (int i = 0; i < records.count(); i++) {
             if (records.mutate(i, isSaveLayer)) {
-                back_indices.emplace(MatchState::Matching, i);
-                log << "SaveLayer @ " << i << '\n';
+                back_indices.emplace(isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
+                                                                            : MatchState::Ignore,
+                                     i);
             } else if (records.mutate(i, isSave)) {
                 back_indices.emplace(MatchState::Ignore, i);
-                log << "Save @ " << i << '\n';
             } else if (records.mutate(i, isRestore)) {
                 auto [state, bi] = back_indices.top();
                 back_indices.pop();
                 if (state == MatchState::Matching) {
-                    log << "Matched! SaveLayer @ " << bi << "and Restore @ " << i << '\n';
+                    log << "Matched! SaveLayer @ " << bi << " and Restore @ " << i << '\n';
                 }
             }
         }
