@@ -1,10 +1,10 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
-#include <ostream>
 #include <sstream>
-#include <stack>
-#include <tuple>
+#include <string>
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkPaint.h"
@@ -12,10 +12,11 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
-#include "prettyprint.hpp"
+#include "include/private/base/SkTArray.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
+#include "src/core/SkRecordOpts.h"
 #include "src/core/SkRecordPattern.h"
 #include "src/core/SkRecords.h"
 #include "tools/flags/CommandLineFlags.h"
@@ -24,6 +25,9 @@
 
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
+static DEFINE_string(transform,
+                     "easteregg",
+                     "Transform to run: easteregg or skrecordopt");
 
 bool isPaintPlain(SkPaint* paint, bool testForOpaque = true) {
     if (!paint) {
@@ -63,49 +67,47 @@ struct RemoveOpaqueSaveLayers {
     SkRecords::Is<SkRecords::Save> isSave;
     SkRecords::Is<SkRecords::Restore> isRestore;
     SkRecords::IsSingleDraw isDraw;
-    RecordOutPrinter printer;
 
     enum class MatchState { Matching, Ignore };
-    std::vector<std::tuple<MatchState, int>> back_indices;
+    skia_private::STArray<8, MatchState> state_stack;
+    skia_private::STArray<8, int> index_stack;
 
     void dbg() {
-        for (auto [state, i] : back_indices) {
-            std::cout << ((state == MatchState::Matching) ? "Match " : "Ignore ") << i << ", ";
+        for (int i = 0; i < index_stack.size(); ++i) {
+            std::cout << ((state_stack[i] == MatchState::Matching) ? "Match " : "Ignore ")
+                      << index_stack[i] << ", ";
         }
     }
 
-    void transform(SkRecord& records) {
+    long long transform(SkRecord& records) {
+        auto start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < records.count(); i++) {
-            dbg();
-            records.visit(i, printer);
             if (records.mutate(i, isSaveLayer)) {
-                back_indices.emplace_back(isPaintPlain(isSaveLayer.get()->paint)
-                                                  ? MatchState::Matching
-                                                  : MatchState::Ignore,
-                                          i);
+                state_stack.push_back(isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
+                                                                             : MatchState::Ignore);
+                index_stack.push_back(i);
             } else if (records.mutate(i, isSave)) {
-                back_indices.emplace_back(MatchState::Ignore, i);
-                std::cout << "save\n";
+                state_stack.push_back(MatchState::Ignore);
+                index_stack.push_back(i);
             } else if (records.mutate(i, isDraw)) {
-                if (back_indices.empty() || std::get<0>(back_indices.back()) == MatchState::Ignore)
-                    continue;
+                if (state_stack.empty() || state_stack.back() == MatchState::Ignore) continue;
                 if (!isPaintPlain(isDraw.get(), false)) {
-                    auto [state, bi] = back_indices.back();
-                    back_indices.pop_back();
-                    back_indices.emplace_back(MatchState::Ignore, bi);
+                    state_stack.back() = MatchState::Ignore;
                 }
-                std::cout << "draw\n";
             } else if (records.mutate(i, isRestore)) {
-                auto [state, bi] = back_indices.back();
-                back_indices.pop_back();
+                if (state_stack.empty()) continue;
+                auto state = state_stack.back();
+                auto index = index_stack.back();
+                state_stack.pop_back();
+                index_stack.pop_back();
 
                 if (state == MatchState::Matching) {
-                    records.replace<SkRecords::Save>(bi);
-                    log << "Matched! SaveLayer @ " << bi << " and Restore @ " << i << '\n';
+                    records.replace<SkRecords::Save>(index);
                 }
-                std::cout << "restore\n";
             }
         }
+        auto end = std::chrono::high_resolution_clock::now();
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     }
 
     std::string str() const { return log.str(); }
@@ -145,7 +147,6 @@ int main(int argc, char** argv) {
     std::string outdir = FLAGS_output[0];
     std::string beforePath = outdir + "/before.png";
     std::string afterPath = outdir + "/after.png";
-    std::string htmlPath = outdir + "/index.html";
 
     sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
     if (!picture) {
@@ -161,49 +162,31 @@ int main(int argc, char** argv) {
 
     printf("Record has %d commands.\n\n", records.count());
 
-    RecordPrinter printerBefore;
-    for (int i = 0; i < records.count(); i++) {
-        records.visit(i, printerBefore);
-    }
-
-    const int beforeCommandCount = records.count();
-    const std::string beforeCommands = printerBefore.str();
-
     drawRecordToFile(records, bounds, beforePath.c_str());
 
-    RemoveOpaqueSaveLayers logger;
-    logger.transform(records);
+    const std::string transform = FLAGS_transform[0];
 
-    RecordPrinter printerAfter;
-    for (int i = 0; i < records.count(); i++) {
-        records.visit(i, printerAfter);
-    }
+    if (transform == "easteregg") {
+        RemoveOpaqueSaveLayers logger;
+        const long long customDurationNs = logger.transform(records);
+        std::cout << "RemoveOpaqueSaveLayers elapsed " << customDurationNs << " ns\n";
 
-    const int afterCommandCount = records.count();
-    const std::string afterCommands = printerAfter.str();
-
-    drawRecordToFile(records, bounds, afterPath.c_str());
-
-    FILE* outFile = fopen(htmlPath.c_str(), "w");
-    if (!outFile) {
-        ERROR("Failed to open output file %s", FLAGS_output[0]);
+        drawRecordToFile(records, bounds, afterPath.c_str());
+    } else if (transform == "skrecordopt") {
+        SkRecord optimizeRecord;
+        SkRecordCanvas optimizeRecorder(&optimizeRecord, bounds);
+        picture->playback(&optimizeRecorder);
+        const auto optimizeStart = std::chrono::high_resolution_clock::now();
+        SkRecordOptimize(&optimizeRecord);
+        const auto optimizeEnd = std::chrono::high_resolution_clock::now();
+        const long long optimizeDurationNs =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(optimizeEnd - optimizeStart)
+                        .count();
+        std::cout << "SkRecordOptimize elapsed " << optimizeDurationNs << " ns\n";
+    } else {
+        ERROR("Unknown transform '%s'", transform.c_str());
         return 1;
     }
-
-    fprintf(outFile, "<!DOCTYPE html>\n");
-    fprintf(outFile, "<html><head><title>SKP Comparison</title></head><body>\n");
-    fprintf(outFile, "<h1>Record Commands Before Transform (%d total)</h1>\n", beforeCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", beforeCommands.c_str());
-    fprintf(outFile, "<h1>Record Commands After Transform (%d total)</h1>\n", afterCommandCount);
-    fprintf(outFile, "<pre>%s</pre>\n", afterCommands.c_str());
-    fprintf(outFile, "<h1>SaveLayer / Restore Log</h1>\n");
-    fprintf(outFile, "<pre>%s</pre>\n", logger.str().c_str());
-    fprintf(outFile, "<h1>Record Snapshots</h1>\n");
-    fprintf(outFile, "<h2>Before</h2><img src='before.png' />\n");
-    fprintf(outFile, "<h2>After</h2><img src='after.png' />\n");
-    fprintf(outFile, "</body></html>\n");
-
-    fclose(outFile);
 
     return 0;
 }
