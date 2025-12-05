@@ -1,18 +1,18 @@
 #include <cstddef>
 #include <cstdio>
+#include <iostream>
+#include <ostream>
 #include <sstream>
 #include <stack>
 #include <tuple>
 #include "include/core/SkCanvas.h"
-#include "include/core/SkColor.h"
 #include "include/core/SkImage.h"
-#include "include/core/SkImageInfo.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPicture.h"
-#include "include/core/SkPixmap.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
+#include "prettyprint.hpp"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
@@ -26,6 +26,10 @@ static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
 
 bool isPaintPlain(SkPaint* paint, bool testForOpaque = true) {
+    if (!paint) {
+        return true;
+    }
+
     if (paint->getShader() || paint->getColorFilter() || paint->getImageFilter() ||
         paint->getMaskFilter()) {
         return false;
@@ -33,45 +37,6 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque = true) {
 
     return (testForOpaque ? paint->getAlphaf() == 1.0 : true) && paint->isSrcOver();
 }
-
-struct RemoveOpaqueSaveLayers {
-    std::stringstream log;
-    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
-    SkRecords::Is<SkRecords::Save> isSave;
-    SkRecords::Is<SkRecords::Restore> isRestore;
-    SkRecords::IsSingleDraw isDraw;
-
-    enum class MatchState { Matching, Ignore };
-    std::stack<std::tuple<MatchState, int>> back_indices;
-
-    void transform(SkRecord& records) {
-        for (int i = 0; i < records.count(); i++) {
-            if (records.mutate(i, isSaveLayer)) {
-                back_indices.emplace(isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
-                                                                            : MatchState::Ignore,
-                                     i);
-            } else if (records.mutate(i, isSave)) {
-                back_indices.emplace(MatchState::Ignore, i);
-            } else if (records.mutate(i, isDraw)) {
-                if (std::get<0>(back_indices.top()) == MatchState::Ignore) continue;
-                if (!isPaintPlain(isDraw.get())) {
-                    auto [state, bi] = back_indices.top();
-                    back_indices.pop();
-                    back_indices.emplace(MatchState::Ignore, bi);
-                }
-            } else if (records.mutate(i, isRestore)) {
-                auto [state, bi] = back_indices.top();
-                back_indices.pop();
-                if (state == MatchState::Matching) {
-                    records.replace<SkRecords::Save>(bi);
-                    log << "Matched! SaveLayer @ " << bi << " and Restore @ " << i << '\n';
-                }
-            }
-        }
-    }
-
-    std::string str() const { return log.str(); }
-};
 
 struct RecordPrinter {
     std::ostringstream os;
@@ -81,7 +46,69 @@ struct RecordPrinter {
         os << "    [" << index++ << "] " << typeid(T).name() << "<br />\n";
     }
 
-    std::string str() const { return os.str(); }
+    std::string str() { return os.str(); }
+};
+
+struct RecordOutPrinter {
+    int index = 0;
+
+    template <typename T> void operator()(const T& op) {
+        std::cout << "    [" << index++ << "] " << typeid(T).name() << "<br />\n";
+    }
+};
+
+struct RemoveOpaqueSaveLayers {
+    std::stringstream log;
+    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    SkRecords::Is<SkRecords::Save> isSave;
+    SkRecords::Is<SkRecords::Restore> isRestore;
+    SkRecords::IsSingleDraw isDraw;
+    RecordOutPrinter printer;
+
+    enum class MatchState { Matching, Ignore };
+    std::vector<std::tuple<MatchState, int>> back_indices;
+
+    void dbg() {
+        for (auto [state, i] : back_indices) {
+            std::cout << ((state == MatchState::Matching) ? "Match " : "Ignore ") << i << ", ";
+        }
+    }
+
+    void transform(SkRecord& records) {
+        for (int i = 0; i < records.count(); i++) {
+            dbg();
+            records.visit(i, printer);
+            if (records.mutate(i, isSaveLayer)) {
+                back_indices.emplace_back(isPaintPlain(isSaveLayer.get()->paint)
+                                                  ? MatchState::Matching
+                                                  : MatchState::Ignore,
+                                          i);
+            } else if (records.mutate(i, isSave)) {
+                back_indices.emplace_back(MatchState::Ignore, i);
+                std::cout << "save\n";
+            } else if (records.mutate(i, isDraw)) {
+                if (back_indices.empty() || std::get<0>(back_indices.back()) == MatchState::Ignore)
+                    continue;
+                if (!isPaintPlain(isDraw.get(), false)) {
+                    auto [state, bi] = back_indices.back();
+                    back_indices.pop_back();
+                    back_indices.emplace_back(MatchState::Ignore, bi);
+                }
+                std::cout << "draw\n";
+            } else if (records.mutate(i, isRestore)) {
+                auto [state, bi] = back_indices.back();
+                back_indices.pop_back();
+
+                if (state == MatchState::Matching) {
+                    records.replace<SkRecords::Save>(bi);
+                    log << "Matched! SaveLayer @ " << bi << " and Restore @ " << i << '\n';
+                }
+                std::cout << "restore\n";
+            }
+        }
+    }
+
+    std::string str() const { return log.str(); }
 };
 
 bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
