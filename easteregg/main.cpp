@@ -25,9 +25,7 @@
 
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, ".", "Output directory");
-static DEFINE_string(transform,
-                     "easteregg",
-                     "Transform to run: easteregg or skrecordopt");
+static DEFINE_string(transform, "easteregg", "Transform to run: easteregg or skrecordopt");
 
 bool isPaintPlain(SkPaint* paint, bool testForOpaque = true) {
     if (!paint) {
@@ -113,12 +111,21 @@ struct RemoveOpaqueSaveLayers {
     std::string str() const { return log.str(); }
 };
 
-bool drawRecordToFile(const SkRecord& records, const SkRect& bounds, const char* filename) {
+bool drawRecordToFile(const SkRecord& records,
+                      const SkRect& bounds,
+                      const char* filename,
+                      long long* drawDurationNs = nullptr) {
     auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(bounds.width(), bounds.height()));
 
     SkCanvas* canvas = surface->getCanvas();
     canvas->clear(SK_ColorWHITE);
+    const auto drawStart = std::chrono::high_resolution_clock::now();
     SkRecordDraw(records, canvas, nullptr, nullptr, 0, nullptr, nullptr);
+    const auto drawEnd = std::chrono::high_resolution_clock::now();
+    if (drawDurationNs) {
+        *drawDurationNs =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(drawEnd - drawStart).count();
+    }
 
     sk_sp<SkImage> image = surface->makeImageSnapshot();
     SkPixmap pixmap;
@@ -162,7 +169,33 @@ int main(int argc, char** argv) {
 
     printf("Record has %d commands.\n\n", records.count());
 
-    drawRecordToFile(records, bounds, beforePath.c_str());
+    auto drawWithTiming = [&](const SkRecord& rec,
+                              const char* label,
+                              const std::string& path,
+                              long long* measuredNs = nullptr) {
+        long long drawDurationNs = 0;
+        if (!drawRecordToFile(rec, bounds, path.c_str(), &drawDurationNs)) {
+            ERROR("Failed to write %s", path.c_str());
+            return false;
+        }
+
+        std::cout << label << " draw elapsed " << drawDurationNs << " ns\n";
+        if (measuredNs) {
+            *measuredNs = drawDurationNs;
+        }
+        return true;
+    };
+
+    long long originalDrawNs = 0;
+    if (!drawWithTiming(records, "Original record", beforePath, &originalDrawNs)) {
+        return 1;
+    }
+
+    auto logSpeedup = [&](const char* label, long long optimizedNs) {
+        if (originalDrawNs <= 0 || optimizedNs <= 0) return;
+        const double ratio = static_cast<double>(originalDrawNs) / optimizedNs;
+        std::cout << label << " speedup vs original: " << ratio << "x\n";
+    };
 
     const std::string transform = FLAGS_transform[0];
 
@@ -171,7 +204,12 @@ int main(int argc, char** argv) {
         const long long customDurationNs = logger.transform(records);
         std::cout << "RemoveOpaqueSaveLayers elapsed " << customDurationNs << " ns\n";
 
-        drawRecordToFile(records, bounds, afterPath.c_str());
+        long long optimizedDrawNs = 0;
+        if (!drawWithTiming(records, "After RemoveOpaqueSaveLayers", afterPath, &optimizedDrawNs)) {
+            return 1;
+        }
+
+        logSpeedup("RemoveOpaqueSaveLayers", optimizedDrawNs);
     } else if (transform == "skrecordopt") {
         SkRecord optimizeRecord;
         SkRecordCanvas optimizeRecorder(&optimizeRecord, bounds);
@@ -183,6 +221,14 @@ int main(int argc, char** argv) {
                 std::chrono::duration_cast<std::chrono::nanoseconds>(optimizeEnd - optimizeStart)
                         .count();
         std::cout << "SkRecordOptimize elapsed " << optimizeDurationNs << " ns\n";
+
+        long long optimizedDrawNs = 0;
+        if (!drawWithTiming(
+                    optimizeRecord, "After SkRecordOptimize", afterPath, &optimizedDrawNs)) {
+            return 1;
+        }
+
+        logSpeedup("SkRecordOptimize", optimizedDrawNs);
     } else {
         ERROR("Unknown transform '%s'", transform.c_str());
         return 1;
