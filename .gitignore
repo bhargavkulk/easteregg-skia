@@ -71,3 +71,4 @@ bazel/user/buildrc
 compile_commands.json
 *.png
 .cache/
+report/

@@ -17,6 +17,7 @@ and security-sensitive actions to me.
 
 ## Testing Expectations
 
+- run `ninja -C out/Debug easteregg` to check for compiler errors
 - `nightly.sh` is the run script, although only run it when you really must and
   I explictly allow or tell you to do so
 
