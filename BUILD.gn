@@ -3727,9 +3727,17 @@ if (skia_build_rust_targets) {
   }
 }
 
+skia_source_set("easteregg") {
+  sources = [ "easteregg/easteregg.cpp" ]
+  public = [ "easteregg/easteregg.h" ]
+  include_dirs = [ "//" ]
+  deps = [ ":skia" ]
+}
+
 test_app("optimizer") {
   sources = [ "easteregg/optimizer.cpp" ]
   deps = [
+    ":easteregg",
     ":flags",
     ":skia",
   ]
