@@ -10,6 +10,7 @@ EASTER_SKP="$REPORT_DIR/easteregg.skp"
 SKRECORDOPT_SKP="$REPORT_DIR/skrecordopt.skp"
 BASELINE_SKP="$REPORT_DIR/no_optimization.skp"
 NANOBENCH_JSON="$REPORT_DIR/nanobench.json"
+SKP_CLIP="0,0,1280,3160"
 
 EASTER_CMD="./out/Debug/optimizer --transform easteregg --input ./test.skp --output $EASTER_SKP"
 SKRECORDOPT_CMD="./out/Debug/optimizer --transform skrecordopt --input ./test.skp --output $SKRECORDOPT_SKP"
@@ -19,4 +20,4 @@ $EASTER_CMD
 $SKRECORDOPT_CMD
 $BASELINE_CMD
 
-./out/Debug/nanobench --sourceType skp --benchType playback --skps "$REPORT_DIR" --config 8888 gl --samples 50 --outResultsFile "$NANOBENCH_JSON"
+./out/Debug/nanobench --sourceType skp --benchType playback --skps "$REPORT_DIR" --config gl --samples 50 --clip "$SKP_CLIP" --outResultsFile "$NANOBENCH_JSON"
