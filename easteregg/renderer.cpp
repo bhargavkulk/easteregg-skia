@@ -1,6 +1,5 @@
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 
 #include "include/core/SkCanvas.h"
@@ -11,12 +10,6 @@
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
 #include "tools/flags/CommandLineFlags.h"
-
-#ifdef DEBUG
-#define DPRINT(x) std::cout << x << std::endl
-#else
-#define DPRINT(x)
-#endif
 
 #define ERROR(fmt, ...) fprintf(stderr, "Error: " fmt "\n", ##__VA_ARGS__)
 
@@ -89,6 +82,5 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    DPRINT("Rendered " << FLAGS_input[0] << " to " << outputPath);
     return 0;
 }
