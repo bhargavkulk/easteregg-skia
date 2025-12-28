@@ -35,6 +35,7 @@ rm -rf jsons skps benchmarks.json report/
 
 $(pwd)/.venv/bin/python -m pip install uv
 $(pwd)/.venv/bin/python -m uv sync --no-dev
+$(pwd)/.venv/bin/python -m playwright install
 $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
 $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
 $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
