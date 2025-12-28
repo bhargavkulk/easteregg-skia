@@ -28,7 +28,7 @@ def main() -> None:
         with bench_file.open(encoding='utf-8') as f:
             timing_data = json.load(f)
 
-        gl_data = timing_data[benchmark_name]['gl']
+        gl_data = timing_data['results'][benchmark_name]['gl']
         samples: list[float] = gl_data['samples']
 
         return sum(samples) / len(samples)
@@ -78,9 +78,7 @@ def main() -> None:
         )
 
     body_content = (
-        '\n'.join(table_rows)
-        if stats
-        else '<p>No benchmarks with save layers were found.</p>'
+        '\n'.join(table_rows) if stats else '<p>No benchmarks with save layers were found.</p>'
     )
 
     html_output = f"""<!DOCTYPE html>
