@@ -22,7 +22,7 @@ def dump_skp(browser, name: str, url: str, out_root: Path) -> None:
     try:
         full_url = url if url.startswith('https://') else f'https://{url}'
         try:
-            page.goto(full_url, timeout=50000)
+            page.goto(full_url, timeout=60000)
         except PlaywrightTimeoutError as exc:
             raise SkpDumpError(f'[{name}] timeout loading page: {exc}') from exc
         except PlaywrightError as exc:
