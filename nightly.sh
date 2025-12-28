@@ -79,10 +79,5 @@ DIFF_PNG="$REPORT_DIR/${AMAZON_STEM}_diff.png"
 ./out/Debug/renderer --input "$EE_SKP" --output "$EE_PNG"
 ./out/Debug/renderer --input "$SK_SKP" --output "$SK_PNG"
 
-if command -v compare >/dev/null 2>&1; then
-    compare "$EE_PNG" "$SK_PNG" "$DIFF_PNG" || true
-elif command -v magick >/dev/null 2>&1; then
-    magick compare "$EE_PNG" "$SK_PNG" "$DIFF_PNG" || true
-else
-    echo "ImageMagick compare not found; skipping diff image"
-fi
+COMPARE_OUTPUT=""
+compare -metric MAE "$EE_PNG" "$SK_PNG" "$DIFF_PNG" 2>&1 || true
