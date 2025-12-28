@@ -32,6 +32,7 @@ ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 python3 -m venv .venv/
 
 rm -rf jsons skps benchmarks.json report/
+mkdir report
 
 $(pwd)/.venv/bin/python -m pip install uv
 $(pwd)/.venv/bin/python -m uv sync --no-dev
@@ -39,4 +40,4 @@ $(pwd)/.venv/bin/python -m playwright install
 $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
 $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
 $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
-cp -r jsons reports/jsons
+cp -r jsons report/jsons
