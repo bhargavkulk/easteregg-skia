@@ -65,7 +65,7 @@ def main() -> None:
         stats.append((base_name, skmean, eemean, blmean))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>skrecordopt (ms)</th><th>easteregg (ms)</th><th>baseline (ms)</th></tr>'
+        '<tr><th>Benchmark</th><th>skrecordopt (ms)</th><th>easteregg (ms)</th><th>baseline (ms)</th><th>speedup</th></tr>'
     ]
     for name, skmean, eemean, blmean in stats:
         table_rows.append(
@@ -74,6 +74,7 @@ def main() -> None:
             f'<td>{skmean:.3f}</td>'
             f'<td>{eemean:.3f}</td>'
             f'<td>{blmean:.3f}</td>'
+            f'<td>{(skmean / eemean):.3f}</td>'
             '</tr>'
         )
 
