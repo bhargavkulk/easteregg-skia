@@ -51,4 +51,4 @@ mkdir opt
 
 ./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_ee.skp
 ./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_sk.skp --transform skrecordopt
-./out/Debug/nanobench --sourceType skp --benchType playback --skps skps/Zen_News__layer_2.skp opt/Zen_News__layer_2_ee.skp opt/Zen_News__layer_2_sk.skp --config gl --samples 100 --clip 0,0,1216,1733 --outResultsFile report/nanobench.json
+./out/Debug/nanobench --sourceType skp --benchType playback --samples 50 --skps skps/Zen_News__layer_2.skp opt/Zen_News__layer_2_ee.skp opt/Zen_News__layer_2_sk.skp --config gl --samples 100 --clip 0,0,1216,1733 --outResultsFile report/nanobench.json
