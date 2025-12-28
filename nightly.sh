@@ -29,4 +29,7 @@ XORG_LOG=${XORG_LOG:-$REPORT_DIR/Xorg-$DISPLAY_NUMBER.log}
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
-pip install --user uv
+python3 -m venv .venv/
+
+$(pwd)/venv/bin/python -m pip install uv
+$(pwd)/venv/bin/python -m uv sync
