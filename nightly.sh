@@ -29,4 +29,4 @@ XORG_LOG=${XORG_LOG:-$REPORT_DIR/Xorg-$DISPLAY_NUMBER.log}
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
-pipx install uv
+pip install --user uv
