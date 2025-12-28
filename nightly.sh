@@ -33,3 +33,4 @@ python3 -m venv .venv/
 
 $(pwd)/.venv/bin/python -m pip install uv
 $(pwd)/.venv/bin/python -m uv sync --no-dev
+$(pwd)/.venv/bin/python -m uv run scripts/download_skps.py
