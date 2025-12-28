@@ -1,6 +1,5 @@
 import argparse
 import json
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -74,21 +73,6 @@ def run_nanobench(
     subprocess.run(cmd, check=True)
 
 
-def run_compare(png1: Path, png2: Path, diff: Path):
-    cmd = [
-        'compare',
-        '-metric',
-        'MAE',
-        str(png1),
-        str(png2),
-        str(diff),
-    ]
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    print('stdout', result.stdout)
-    print('stderr', result.stderr)
-
-
 def run_renderer(binary: Path, input: Path, output: Path):
     output.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -153,11 +137,8 @@ def main():
 
         ee_png: Path = args.png_dir / f'{stem}__ee.png'
         bl_png: Path = args.png_dir / f'{stem}.png'
-        diff_png: Path = args.png_dir / f'{stem}__diff.png'
-
         run_renderer(args.renderer, skp, bl_png)
         run_renderer(args.renderer, ee_output, ee_png)
-        run_compare(bl_png, ee_png, diff_png)
 
     print(f'Ran {bench_count} nanobench suites')
 

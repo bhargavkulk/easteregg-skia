@@ -7,6 +7,8 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
+import subprocess
 from pathlib import Path
 
 
@@ -14,9 +16,37 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Generate an HTML report for nanobench results.')
     parser.add_argument('--nanobench-dir', type=Path, default=Path('report/nanobench'))
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
+    parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     parser.add_argument('--output', type=Path, default=Path('report/index.html'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     return parser.parse_args()
+
+
+FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
+
+
+def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
+    diff.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        'compare',
+        '-metric',
+        'AE',
+        str(png1),
+        str(png2),
+        str(diff),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode not in (0, 1):
+        raise RuntimeError(
+            f'ImageMagick compare failed for {png1} vs {png2} ({result.returncode}): {result.stderr}'
+        )
+
+    stderr = result.stderr.strip()
+    print(f'compare {png1.name} vs {png2.name}: {stderr}')
+
+    match = FLOAT_RE.search(stderr)
+    return float(match.group(0)) if match else None
 
 
 def main() -> None:
@@ -33,7 +63,7 @@ def main() -> None:
 
         return sum(samples) / len(samples)
 
-    stats: list[tuple[str, float, float, float]] = []  # list[name, skmean, eemean, blmean]
+    stats: list[tuple[str, float, float, float, float | None, str | None]] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -59,22 +89,42 @@ def main() -> None:
         easteregg = f'{base_name}__ee{suffix}'
         baseline = f'{base_name}{suffix}'
 
+        baseline_png = args.png_dir / f'{base_name}.png'
+        ee_png = args.png_dir / f'{base_name}__ee.png'
+        diff_png = args.png_dir / f'{base_name}__diff.png'
+
+        diff_metric: float | None = None
+        diff_href: str | None = None
+        if baseline_png.is_file() and ee_png.is_file():
+            diff_metric = run_compare(baseline_png, ee_png, diff_png)
+            diff_href = f'/pngs/{diff_png.name}'
+
         skmean = collect_stats(base_name, skrecordopt)
         eemean = collect_stats(base_name, easteregg)
         blmean = collect_stats(base_name, baseline)
-        stats.append((base_name, skmean, eemean, blmean))
+        stats.append((base_name, skmean, eemean, blmean, diff_metric, diff_href))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>speedup</th></tr>'
+        '<tr><th>Benchmark</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff AE</th><th>speedup</th></tr>'
     ]
-    for name, skmean, eemean, blmean in stats:
+    for name, skmean, eemean, blmean, diff_metric, diff_href in stats:
         speedup = skmean / eemean
+        if diff_metric is not None and diff_href:
+            diff_display = (
+                f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
+            )
+        elif diff_href:
+            diff_display = f'<a href="{html.escape(diff_href)}">view</a>'
+        else:
+            diff_display = '&mdash;'
+
         table_rows.append(
             '<tr>'
             f'<td>{html.escape(name)}</td>'
             f'<td><code>{skmean:.3f}</code></td>'
             f'<td><code>{eemean:.3f}</code></td>'
             f'<td><code>{blmean:.3f}</code></td>'
+            f'<td>{diff_display}</td>'
             f'<td style="color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             '</tr>'
         )
