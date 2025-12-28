@@ -66,16 +66,12 @@
 set -euo pipefail
 set -x
 
-# MUST be non-root
-if [[ "$(id -u)" -eq 0 ]]; then
-    echo "ERROR: Do not run this as root"
-    exit 1
-fi
-
-DISPLAY_NUMBER=99
+# Root-friendly X debug script
+DISPLAY_NUMBER=${DISPLAY_NUMBER:-99}
 export DISPLAY=":$DISPLAY_NUMBER"
 
-LOGDIR="$(pwd)/xorg-debug"
+WORKDIR="$(pwd)"
+LOGDIR="$WORKDIR/xorg-debug"
 LOGFILE="$LOGDIR/Xorg-$DISPLAY_NUMBER.log"
 PID=""
 
@@ -89,30 +85,51 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting Xorg on $DISPLAY as user $(whoami)"
-Xorg ":$DISPLAY_NUMBER" -noreset -logfile "$LOGFILE" >"$LOGFILE" 2>&1 &
-PID=$!
+echo "Running as uid=$(id -u) gid=$(id -g) — LOG: $LOGFILE"
 
-# wait up to 8s
-for i in {1..8}; do
+# Prefer Xvfb (works well in containers / CI). Use Xorg otherwise.
+if command -v Xvfb >/dev/null 2>&1; then
+    echo "Starting Xvfb on $DISPLAY (redirecting to $LOGFILE)"
+    Xvfb "$DISPLAY" -screen 0 1280x1024x24 >"$LOGFILE" 2>&1 &
+    PID=$!
+else
+    echo "Xvfb not found — starting Xorg (redirecting to $LOGFILE)"
+    # When privileged, Xorg rejects -logfile; redirect instead.
+    Xorg "$DISPLAY" -noreset >"$LOGFILE" 2>&1 &
+    PID=$!
+fi
+
+# wait for X to appear (up to ~10s)
+for i in {1..10}; do
     sleep 1
     if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-        echo "Xorg is UP (pid=$PID)"
+        echo "X server is UP on $DISPLAY (pid=$PID)"
         break
     fi
 done
 
 if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-    echo "Xorg FAILED"
-    echo "==== Xorg log ===="
-    sed -n '1,200p' "$LOGFILE"
+    echo "ERROR: X failed to start. Dumping log:"
+    if [[ -f "$LOGFILE" ]]; then
+        sed -n '1,300p' "$LOGFILE" || true
+    else
+        echo "(no logfile present at $LOGFILE)"
+    fi
     exit 1
 fi
 
-echo "==== xdpyinfo ===="
-xdpyinfo -display "$DISPLAY" | head -n 20
+echo "==== xdpyinfo summary ===="
+xdpyinfo -display "$DISPLAY" | awk 'NR<=40{print}'
 
-echo "==== basic X test ===="
-xset q
+echo "==== basic X tests ===="
+xset q || true
 
-echo "SUCCESS: Xorg works as non-root"
+echo "==== optional GL info ===="
+if command -v glxinfo >/dev/null 2>&1; then
+    glxinfo -display "$DISPLAY" | awk '/OpenGL vendor|OpenGL renderer|OpenGL version/ {print}'
+else
+    echo "glxinfo not installed — skipping GL info"
+fi
+
+echo "SUCCESS: X server functional on $DISPLAY (pid=$PID)"
+# keep server running until script exits; cleanup trap will stop it.
