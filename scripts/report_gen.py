@@ -88,10 +88,11 @@ def main() -> None:
 <head>
 <meta charset="utf-8">
 <title>{html.escape(args.title)}</title>
+<script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
 </head>
 <body>
 <h1>{html.escape(args.title)}</h1>
-<table>
+<table class="table-sort table-arrows remember-sort">
 {body_content}
 </table>
 </body>
