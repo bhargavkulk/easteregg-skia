@@ -65,17 +65,17 @@ def main() -> None:
         stats.append((base_name, skmean, eemean, blmean))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>skrecordopt (ms)</th><th>easteregg (ms)</th><th>baseline (ms)</th><th>speedup</th></tr>'
+        '<tr><th>Benchmark</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>speedup</th></tr>'
     ]
     for name, skmean, eemean, blmean in stats:
         speedup = skmean / eemean
         table_rows.append(
             '<tr>'
             f'<td>{html.escape(name)}</td>'
-            f'<td>{skmean:.3f}</td>'
-            f'<td>{eemean:.3f}</td>'
-            f'<td>{blmean:.3f}</td>'
-            f'<td style="color:{"green" if speedup > 1.0 else "red"}">{speedup:.3f}</td>'
+            f'<td><code>{skmean:.3f}</code></td>'
+            f'<td><code>{eemean:.3f}</code></td>'
+            f'<td><code>{blmean:.3f}</code></td>'
+            f'<td style="color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             '</tr>'
         )
 
@@ -88,10 +88,32 @@ def main() -> None:
 <head>
 <meta charset="utf-8">
 <title>{html.escape(args.title)}</title>
+<style>
+body {{
+    margin: 40px auto;
+    max-width: 800px;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #444;
+    padding: 0 10px
+}}
+table {{
+    border-collapse: collapse;
+}}
+table th {{
+    background-color: gray;
+}}
+table th,
+table td {{
+    border: 1px solid #444;
+    padding: 4px 8px;
+}}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
 </head>
 <body>
 <h1>{html.escape(args.title)}</h1>
+<p><em>All time units are in ms</em></p>
 <table class="table-sort table-arrows remember-sort">
 {body_content}
 </table>
