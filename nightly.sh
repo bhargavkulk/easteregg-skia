@@ -81,3 +81,8 @@ DIFF_PNG="$REPORT_DIR/${AMAZON_STEM}_diff.png"
 
 COMPARE_OUTPUT=""
 compare -metric MAE "$EE_PNG" "$SK_PNG" "$DIFF_PNG" 2>&1 || true
+
+$(pwd)/.venv/bin/python scripts/report_gen.py \
+    --nanobench-dir "$REPORT_DIR/nanobench" \
+    --json-dir jsons \
+    --output "$REPORT_DIR/index.html"
