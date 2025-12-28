@@ -66,7 +66,6 @@ def update_json_dim(
 ) -> bool:
     json_path, data = load_json(json_folder, stem)
     has_savelayer = find_command(data, 'SaveLayer')
-    print(stem, has_savelayer)
     data['dim'] = [width, height]
     data['has_save_layer'] = has_savelayer
     json_path.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
