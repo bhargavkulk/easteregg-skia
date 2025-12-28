@@ -31,5 +31,5 @@ ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
 python3 -m venv .venv/
 
-$(pwd)/venv/bin/python -m pip install uv
-$(pwd)/venv/bin/python -m uv sync
+$(pwd)/.venv/bin/python -m pip install uv
+$(pwd)/.venv/bin/python -m uv sync
