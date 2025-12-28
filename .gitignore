@@ -74,3 +74,4 @@ compile_commands.json
 report/
 *.skp
 .venv/
+*.json
