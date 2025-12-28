@@ -118,15 +118,15 @@ def main():
 
         bench_count += 1
 
-        ee_output = args.opt_dir / f'{stem}_ee.skp'
-        sk_output = args.opt_dir / f'{stem}_sk.skp'
+        ee_output = args.opt_dir / f'{stem}__ee.skp'
+        sk_output = args.opt_dir / f'{stem}__sk.skp'
 
         run_optimizer(args.optimizer, skp, ee_output)
         run_optimizer(args.optimizer, skp, sk_output, transform='skrecordopt')
 
         # copy_to_report(args.report_dir, [skp, ee_output, sk_output])
 
-        results_file = args.nanobench_dir / f'{stem}_nanobench.json'
+        results_file = args.nanobench_dir / f'{stem}__nanobench.json'
         run_nanobench(args.nanobench, [skp, ee_output, sk_output], results_file, clip, args.samples)
 
     print(f'Ran {bench_count} nanobench suites')
