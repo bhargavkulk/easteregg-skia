@@ -7,9 +7,6 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-MAX_URLS = 5
-PAGE_SETTLE_MS = 5000
-
 
 class SkpDumpError(RuntimeError):
     """Raised when generating an SKP for a URL fails."""
@@ -28,7 +25,7 @@ def dump_skp(browser, name: str, url: str, out_root: Path) -> None:
         except PlaywrightError as exc:
             raise SkpDumpError(f'[{name}] failed to load page: {exc}') from exc
 
-        page.wait_for_timeout(PAGE_SETTLE_MS)
+        page.wait_for_timeout(5000)
 
         try:
             page.evaluate(f"chrome.gpuBenchmarking.printToSkPicture('{site_dir.absolute()}')")
@@ -48,10 +45,7 @@ def process_urls(urls: dict[str, Any], out_dir: Path) -> None:
                 args=['--no-sandbox', '--enable-gpu-benchmarking'],
             )
             try:
-                for idx, (name, url) in enumerate(urls.items()):
-                    if idx >= MAX_URLS:
-                        print('[*] reached URL limit; stopping early')
-                        break
+                for name, url in urls.items():
                     print(f'[*] processing {name}')
                     site_dir = out_dir / name
                     dump_skp(browser, name, url, out_dir)
