@@ -66,7 +66,13 @@
 set -euo pipefail
 set -x
 
-DISPLAY_NUMBER=${DISPLAY_NUMBER:-99}
+# MUST be non-root
+if [[ "$(id -u)" -eq 0 ]]; then
+    echo "ERROR: Do not run this as root"
+    exit 1
+fi
+
+DISPLAY_NUMBER=99
 export DISPLAY=":$DISPLAY_NUMBER"
 
 LOGDIR="$(pwd)/xorg-debug"
@@ -83,12 +89,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting Xorg on $DISPLAY"
+echo "Starting Xorg on $DISPLAY as user $(whoami)"
 Xorg ":$DISPLAY_NUMBER" -noreset -logfile "$LOGFILE" >"$LOGFILE" 2>&1 &
 PID=$!
 
-# wait up to 5 seconds for Xorg
-for i in {1..5}; do
+# wait up to 8s
+for i in {1..8}; do
     sleep 1
     if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
         echo "Xorg is UP (pid=$PID)"
@@ -97,9 +103,9 @@ for i in {1..5}; do
 done
 
 if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-    echo "Xorg FAILED to start"
+    echo "Xorg FAILED"
     echo "==== Xorg log ===="
-    sed -n '1,200p' "$LOGFILE" || true
+    sed -n '1,200p' "$LOGFILE"
     exit 1
 fi
 
@@ -109,4 +115,4 @@ xdpyinfo -display "$DISPLAY" | head -n 20
 echo "==== basic X test ===="
 xset q
 
-echo "SUCCESS: Xorg is functional"
+echo "SUCCESS: Xorg works as non-root"
