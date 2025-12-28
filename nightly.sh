@@ -45,4 +45,9 @@ fi
 
 cp -r jsons report/jsons
 cp -r benchmarks.json report/
-jq --help
+
+rm -rf opt
+mkdir opt
+
+./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_ee.skp
+./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_sk.skp --transform skrecordopt
