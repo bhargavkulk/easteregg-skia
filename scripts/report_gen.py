@@ -101,7 +101,7 @@ table {{
     border-collapse: collapse;
 }}
 table th {{
-    background-color: gray;
+    background-color: #e0e0e0;
 }}
 table th,
 table td {{

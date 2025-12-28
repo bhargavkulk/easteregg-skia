@@ -67,20 +67,9 @@ $(pwd)/.venv/bin/python scripts/run_all_skps.py \
     --report-dir "$REPORT_DIR" \
     --nanobench-dir "$REPORT_DIR/nanobench" \
     --json-dir jsons \
-    --samples 100
-
-AMAZON_STEM="Amazon__layer_5"
-EE_SKP="opt/${AMAZON_STEM}__ee.skp"
-SK_SKP="opt/${AMAZON_STEM}__sk.skp"
-EE_PNG="$REPORT_DIR/${AMAZON_STEM}__ee.png"
-SK_PNG="$REPORT_DIR/${AMAZON_STEM}__sk.png"
-DIFF_PNG="$REPORT_DIR/${AMAZON_STEM}__diff.png"
-
-./out/Debug/renderer --input "$EE_SKP" --output "$EE_PNG"
-./out/Debug/renderer --input "$SK_SKP" --output "$SK_PNG"
-
-COMPARE_OUTPUT=""
-compare -metric MAE "$EE_PNG" "$SK_PNG" "$DIFF_PNG" 2>&1 || true
+    --samples 100 \
+    --renderer out/Debug/renderer \
+    --png-dir report/pngs
 
 $(pwd)/.venv/bin/python scripts/report_gen.py \
     --nanobench-dir "$REPORT_DIR/nanobench" \

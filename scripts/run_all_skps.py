@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
 def parse_args():
@@ -15,6 +16,8 @@ def parse_args():
     parser.add_argument('--nanobench-dir', type=Path, default=Path('report/nanobench'))
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--samples', type=int, default=100)
+    parser.add_argument('--renderer', type=Path, default=Path('out/Debug/renderer'))
+    parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     return parser.parse_args()
 
 
@@ -48,14 +51,8 @@ def run_optimizer(binary: Path, skp: Path, output: Path, transform: str | None =
     run_cmd(cmd)
 
 
-def copy_to_report(dest_dir: Path, paths: list[Path]) -> None:
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    for path in paths:
-        shutil.copy2(path, dest_dir / path.name)
-
-
 def run_nanobench(
-    binary: Path, skp_paths: list[Path], results_path: Path, clip: str | None, samples: int
+    binary: Path, skp_paths: list[Path], results_path: Path, clip: Optional[str], samples: int
 ) -> None:
     results_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -74,6 +71,33 @@ def run_nanobench(
     if clip:
         cmd.extend(['--clip', clip])
     cmd.extend(['--outResultsFile', str(results_path)])
+    subprocess.run(cmd, check=True)
+
+
+def run_compare(png1: Path, png2: Path, diff: Path):
+    cmd = [
+        'compare',
+        '-metric',
+        'MAE',
+        str(png1),
+        str(png2),
+        str(diff),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print('stdout', result.stdout)
+    print('stderr', result.stderr)
+
+
+def run_renderer(binary: Path, input: Path, output: Path):
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        str(binary),
+        '--input',
+        str(input),
+        '--output',
+        str(output),
+    ]
     subprocess.run(cmd, check=True)
 
 
@@ -118,16 +142,22 @@ def main():
 
         bench_count += 1
 
-        ee_output = args.opt_dir / f'{stem}__ee.skp'
-        sk_output = args.opt_dir / f'{stem}__sk.skp'
+        ee_output: Path = args.opt_dir / f'{stem}__ee.skp'
+        sk_output: Path = args.opt_dir / f'{stem}__sk.skp'
 
         run_optimizer(args.optimizer, skp, ee_output)
         run_optimizer(args.optimizer, skp, sk_output, transform='skrecordopt')
 
-        # copy_to_report(args.report_dir, [skp, ee_output, sk_output])
-
         results_file = args.nanobench_dir / f'{stem}__nanobench.json'
         run_nanobench(args.nanobench, [skp, ee_output, sk_output], results_file, clip, args.samples)
+
+        ee_png: Path = args.png_dir / f'{stem}__ee.png'
+        bl_png: Path = args.png_dir / f'{stem}.png'
+        diff_png: Path = args.png_dir / f'{stem}__diff.png'
+
+        run_renderer(args.renderer, skp, bl_png)
+        run_renderer(args.renderer, ee_output, ee_png)
+        run_compare(bl_png, ee_png, diff_png)
 
     print(f'Ran {bench_count} nanobench suites')
 
