@@ -68,13 +68,14 @@ def main() -> None:
         '<tr><th>Benchmark</th><th>skrecordopt (ms)</th><th>easteregg (ms)</th><th>baseline (ms)</th><th>speedup</th></tr>'
     ]
     for name, skmean, eemean, blmean in stats:
+        speedup = skmean / eemean
         table_rows.append(
             '<tr>'
             f'<td>{html.escape(name)}</td>'
             f'<td>{skmean:.3f}</td>'
             f'<td>{eemean:.3f}</td>'
             f'<td>{blmean:.3f}</td>'
-            f'<td>{(skmean / eemean):.3f}</td>'
+            f'<td style="color:{"green" if speedup > 1.0 else "red"}">{speedup:.3f}</td>'
             '</tr>'
         )
 
