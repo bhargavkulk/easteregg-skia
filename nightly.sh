@@ -31,7 +31,7 @@ ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
 python3 -m venv .venv/
 
-rm -rf report
+rm -rf report skps jsons benchmarks.json
 mkdir report
 
 $(pwd)/.venv/bin/python -m pip install uv
