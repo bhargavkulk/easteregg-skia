@@ -41,6 +41,7 @@ if [ ! -d "skps" ]; then
     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
     $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
-    cp -r jsons report/jsons
-    cp -r benchmarks.json report/
 fi
+
+cp -r jsons report/jsons
+cp -r benchmarks.json report/
