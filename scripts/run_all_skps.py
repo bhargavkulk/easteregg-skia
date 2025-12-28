@@ -124,7 +124,7 @@ def main():
         run_optimizer(args.optimizer, skp, ee_output)
         run_optimizer(args.optimizer, skp, sk_output, transform='skrecordopt')
 
-        copy_to_report(args.report_dir, [skp, ee_output, sk_output])
+        # copy_to_report(args.report_dir, [skp, ee_output, sk_output])
 
         results_file = args.nanobench_dir / f'{stem}_nanobench.json'
         run_nanobench(args.nanobench, [skp, ee_output, sk_output], results_file, clip, args.samples)
