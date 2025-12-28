@@ -57,13 +57,14 @@ cp benchmarks.json "$REPORT_DIR/"
 rm -rf opt
 mkdir opt
 
-./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_ee.skp
-./out/Debug/optimizer --input skps/Zen_News__layer_2.skp --output opt/Zen_News__layer_2_sk.skp --transform skrecordopt
-
-cp skps/Zen_News__layer_2.skp "$REPORT_DIR/"
-cp opt/Zen_News__layer_2_ee.skp "$REPORT_DIR/"
-cp opt/Zen_News__layer_2_sk.skp "$REPORT_DIR/"
-
 start_xorg
 
-./out/Debug/nanobench --sourceType skp --benchType playback --samples 50 --skps skps/Zen_News__layer_2.skp opt/Zen_News__layer_2_ee.skp opt/Zen_News__layer_2_sk.skp --config gl --samples 100 --clip 0,0,1216,1733 --outResultsFile "$REPORT_DIR/nanobench.json"
+$(pwd)/.venv/bin/python scripts/run_all_skps.py \
+    --skp-dir skps \
+    --optimizer out/Debug/optimizer \
+    --nanobench out/Debug/nanobench \
+    --opt-dir opt \
+    --report-dir "$REPORT_DIR" \
+    --nanobench-dir "$REPORT_DIR/nanobench" \
+    --json-dir jsons \
+    --samples 100
