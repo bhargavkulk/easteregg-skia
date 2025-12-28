@@ -45,3 +45,4 @@ fi
 
 cp -r jsons report/jsons
 cp -r benchmarks.json report/
+jq --help
