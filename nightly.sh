@@ -27,4 +27,6 @@ if [ ! -d "out/Debug" ]; then
 fi
 XORG_LOG=${XORG_LOG:-$REPORT_DIR/Xorg-$DISPLAY_NUMBER.log}
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
-ninja -C out/Debug optimizer nanobench renderer skp_parser
+ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
+
+pip install uv

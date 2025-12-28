@@ -72,3 +72,4 @@ compile_commands.json
 *.png
 .cache/
 report/
+*.skp

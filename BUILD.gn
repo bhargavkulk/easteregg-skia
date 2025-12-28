@@ -3750,3 +3750,11 @@ test_app("renderer") {
     ":skia",
   ]
 }
+
+test_app("print_bounds") {
+  sources = [ "easteregg/print_bounds.cpp" ]
+  deps = [
+    ":flags",
+    ":skia",
+  ]
+}
