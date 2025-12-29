@@ -158,6 +158,7 @@ table th {{
 table th,
 table td {{
     border: 1px solid #444;
+    padding: 0 5px;
 }}
 table tr:hover {{
     background-color: #444;
