@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-#
-# Generate an HTML report summarizing nanobench runs.
-
-from __future__ import annotations
-
 import argparse
 import html
 import json
@@ -11,6 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Optional
+
+# TODO, parse the optimzied skps to json as well, and pass that to the table
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,7 +124,7 @@ def main() -> None:
             f'<td><code>{skmean:.3f}</code></td>'
             f'<td><code>{eemean:.3f}</code></td>'
             f'<td><code>{blmean:.3f}</code></td>'
-            f'<td>>{diff_display}</td>'
+            f'<td>{diff_display}</td>'
             f'<td style="color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             '</tr>'
         )
