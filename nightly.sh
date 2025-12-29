@@ -58,23 +58,23 @@ rm -rf opt report
 mkdir opt
 mkdir report
 
-cp skps/Facebook__layer_0.skp report/
+cp jsons/Facebook__layer_0.json report/
 
 start_xorg
 
-$(pwd)/.venv/bin/python scripts/run_all_skps.py \
-    --skp-dir skps \
-    --optimizer out/Debug/optimizer \
-    --nanobench out/Debug/nanobench \
-    --opt-dir opt \
-    --report-dir "$REPORT_DIR" \
-    --nanobench-dir "$REPORT_DIR/nanobench" \
-    --json-dir jsons \
-    --samples 100 \
-    --renderer out/Debug/renderer \
-    --png-dir report/pngs
+# $(pwd)/.venv/bin/python scripts/run_all_skps.py \
+#     --skp-dir skps \
+#     --optimizer out/Debug/optimizer \
+#     --nanobench out/Debug/nanobench \
+#     --opt-dir opt \
+#     --report-dir "$REPORT_DIR" \
+#     --nanobench-dir "$REPORT_DIR/nanobench" \
+#     --json-dir jsons \
+#     --samples 100 \
+#     --renderer out/Debug/renderer \
+#     --png-dir report/pngs
 
-$(pwd)/.venv/bin/python scripts/report_gen.py \
-    --nanobench-dir "$REPORT_DIR/nanobench" \
-    --json-dir jsons \
-    --output "$REPORT_DIR/index.html"
+# $(pwd)/.venv/bin/python scripts/report_gen.py \
+#     --nanobench-dir "$REPORT_DIR/nanobench" \
+#     --json-dir jsons \
+#     --output "$REPORT_DIR/index.html"
