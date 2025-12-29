@@ -153,7 +153,7 @@ table {{
     border-collapse: collapse;
 }}
 table th {{
-    background-color: #e0e0e0;
+    background-color: #a9a9a9;
 }}
 table th,
 table td {{
@@ -161,7 +161,7 @@ table td {{
     padding: 0 5px;
 }}
 table tr:hover {{
-    background-color: #444;
+    background-color: #d3d3d3;
 }}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
