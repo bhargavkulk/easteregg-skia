@@ -97,7 +97,7 @@ def main() -> None:
         diff_href: str | None = None
         if baseline_png.is_file() and ee_png.is_file():
             diff_metric = run_compare(baseline_png, ee_png, diff_png)
-            diff_href = f'/pngs/{diff_png.name}'
+            diff_href = f'./pngs/{diff_png.name}'
 
         skmean = collect_stats(base_name, skrecordopt)
         eemean = collect_stats(base_name, easteregg)
@@ -110,9 +110,7 @@ def main() -> None:
     for name, skmean, eemean, blmean, diff_metric, diff_href in stats:
         speedup = skmean / eemean
         if diff_metric is not None and diff_href:
-            diff_display = (
-                f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
-            )
+            diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
         elif diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}">view</a>'
         else:
