@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 # TODO, parse the optimzied skps to json as well, and pass that to the table
+# TODO, hover highlighting for table
+# TODO, right align the numeric columns
 
 
 def parse_args() -> argparse.Namespace:
@@ -120,12 +122,12 @@ def main() -> None:
         table_rows.append(
             '<tr>'
             f'<td>{html.escape(format_name(name))}</td>'
-            f'<td><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
-            f'<td><code>{skmean:.3f}</code></td>'
-            f'<td><code>{eemean:.3f}</code></td>'
-            f'<td><code>{blmean:.3f}</code></td>'
-            f'<td>{diff_display}</td>'
-            f'<td style="color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
+            f'<td style="text-align:end"><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
+            f'<td style="text-align:end"><code>{skmean:.3f}</code></td>'
+            f'<td style="text-align:end"><code>{eemean:.3f}</code></td>'
+            f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
+            f'<td style="text-align:end">{diff_display}</td>'
+            f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             '</tr>'
         )
 
@@ -156,6 +158,9 @@ table th {{
 table th,
 table td {{
     border: 1px solid #444;
+}}
+table tr:hover {{
+    background-color: #444;
 }}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
