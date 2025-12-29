@@ -10,6 +10,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,6 +50,10 @@ def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
     return float(match.group(0)) if match else None
 
 
+def format_name(name: str) -> str:
+    return name.replace('__', ' | ').replace('_', ' ')
+
+
 def main() -> None:
     args = parse_args()
 
@@ -63,7 +68,7 @@ def main() -> None:
 
         return sum(samples) / len(samples)
 
-    stats: list[tuple[str, float, float, float, float | None, str | None]] = []
+    stats: list[tuple[str, float, float, float, Optional[float], Optional[str], int]] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -102,12 +107,12 @@ def main() -> None:
         skmean = collect_stats(base_name, skrecordopt)
         eemean = collect_stats(base_name, easteregg)
         blmean = collect_stats(base_name, baseline)
-        stats.append((base_name, skmean, eemean, blmean, diff_metric, diff_href))
+        stats.append((base_name, skmean, eemean, blmean, diff_metric, diff_href, length))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff AE</th><th>speedup</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th></tr>'
     ]
-    for name, skmean, eemean, blmean, diff_metric, diff_href in stats:
+    for name, skmean, eemean, blmean, diff_metric, diff_href, cmds_len in stats:
         speedup = skmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -118,11 +123,12 @@ def main() -> None:
 
         table_rows.append(
             '<tr>'
-            f'<td>{html.escape(name)}</td>'
+            f'<td>{html.escape(format_name(name))}</td>'
+            f'<td><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
             f'<td><code>{skmean:.3f}</code></td>'
             f'<td><code>{eemean:.3f}</code></td>'
             f'<td><code>{blmean:.3f}</code></td>'
-            f'<td>{diff_display}</td>'
+            f'<td>>{diff_display}</td>'
             f'<td style="color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             '</tr>'
         )
@@ -141,9 +147,9 @@ body {{
     margin: 40px auto;
     max-width: 800px;
     line-height: 1.6;
-    font-size: 18px;
+    font-size: 16px;
     color: #444;
-    padding: 0 10px
+    padding: 0 10px;
 }}
 table {{
     border-collapse: collapse;
@@ -154,7 +160,6 @@ table th {{
 table th,
 table td {{
     border: 1px solid #444;
-    padding: 4px 8px;
 }}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
