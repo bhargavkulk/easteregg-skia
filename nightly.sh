@@ -58,7 +58,7 @@ rm -rf opt report
 mkdir opt
 mkdir report
 
-cp jsons/Facebook__layer_0.json report/
+./out/Debug/optimizer --input skps/Facebook__layer_0.skp --output opt/Facebook__layer_0__ee.skp
 
 start_xorg
 
