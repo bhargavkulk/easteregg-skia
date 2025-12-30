@@ -36,7 +36,7 @@ void RemoveOpaqueSaveLayers::dbg() {
 void RemoveOpaqueSaveLayers::transform(SkRecord& records) {
     for (int i = 0; i < records.count(); i++) {
         if (records.mutate(i, isSaveLayer)) {
-            state_stack.back() = MatchState::Ignore;
+            if (!state_stack.empty()) state_stack.back() = MatchState::Ignore;
             state_stack.push_back(isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
                                                                          : MatchState::Ignore);
             index_stack.push_back(i);
