@@ -59,7 +59,6 @@ mkdir -p "$REPORT_DIR"
 # mkdir report
 
 ls old_bench
-$(pwd)/.venv/bin/python -m pip install uv
 $(pwd)/.venv/bin/python -m uv sync --no-dev
     # $(pwd)/.venv/bin/python -m playwright install
 #     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
