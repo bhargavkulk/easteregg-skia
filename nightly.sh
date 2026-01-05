@@ -59,7 +59,7 @@ mkdir -p "$REPORT_DIR"
 
 ls old_bench
 
-rm -rf .venv
+
 
 # $(pwd)/.venv/bin/python -m pip install uv
 # $(pwd)/.venv/bin/python -m uv sync --no-dev
@@ -69,6 +69,11 @@ rm -rf .venv
 # #     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
 
 ls old_jsons
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
 
 start_xorg
 
