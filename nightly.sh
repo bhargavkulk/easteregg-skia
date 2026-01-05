@@ -34,45 +34,47 @@ if [ ! -d "out/Debug" ]; then
     python3 tools/git-sync-deps
 fi
 
-./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
-ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
+# ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
+# ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
-python3 -m venv .venv
+# python3 -m venv .venv
 
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 
-if [ ! -d "skps" ]; then
-    $(pwd)/.venv/bin/python -m pip install uv
-    $(pwd)/.venv/bin/python -m uv sync --no-dev
-    $(pwd)/.venv/bin/python -m playwright install
-    $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
-    $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
-    $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
-fi
+# if [ ! -d "skps" ]; then
+#     $(pwd)/.venv/bin/python -m pip install uv
+#     $(pwd)/.venv/bin/python -m uv sync --no-dev
+#     $(pwd)/.venv/bin/python -m playwright install
+#     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
+#     $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
+#     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
+# fi
 
-cp -r jsons "$REPORT_DIR/jsons"
-cp benchmarks.json "$REPORT_DIR/"
+# cp -r jsons "$REPORT_DIR/jsons"
+# cp benchmarks.json "$REPORT_DIR/"
 
-rm -rf opt report
-mkdir opt
-mkdir report
+# rm -rf opt report
+# mkdir opt
+# mkdir report
+
+ls old_bench
 
 start_xorg
 
-$(pwd)/.venv/bin/python scripts/run_all_skps.py \
-    --skp-dir skps \
-    --optimizer out/Debug/optimizer \
-    --nanobench out/Debug/nanobench \
-    --opt-dir opt \
-    --report-dir "$REPORT_DIR" \
-    --nanobench-dir "$REPORT_DIR/nanobench" \
-    --json-dir jsons \
-    --samples 100 \
-    --renderer out/Debug/renderer \
-    --png-dir report/pngs
+# $(pwd)/.venv/bin/python scripts/run_all_skps.py \
+#     --skp-dir skps \
+#     --optimizer out/Debug/optimizer \
+#     --nanobench out/Debug/nanobench \
+#     --opt-dir opt \
+#     --report-dir "$REPORT_DIR" \
+#     --nanobench-dir "$REPORT_DIR/nanobench" \
+#     --json-dir jsons \
+#     --samples 100 \
+#     --renderer out/Debug/renderer \
+#     --png-dir report/pngs
 
-$(pwd)/.venv/bin/python scripts/report_gen.py \
-    --nanobench-dir "$REPORT_DIR/nanobench" \
-    --json-dir jsons \
-    --output "$REPORT_DIR/index.html"
+# $(pwd)/.venv/bin/python scripts/report_gen.py \
+#     --nanobench-dir "$REPORT_DIR/nanobench" \
+#     --json-dir jsons \
+#     --output "$REPORT_DIR/index.html"
