@@ -75,8 +75,8 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-cp old_jsons report/old_jsons
-cp jsons report/jsons
+cp -r old_jsons report/old_jsons
+cp -r jsons report/jsons
 
 start_xorg
 
