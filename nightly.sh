@@ -37,7 +37,6 @@ fi
 # ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
 # ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
-# python3 -m venv .venv
 
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
@@ -59,6 +58,7 @@ mkdir -p "$REPORT_DIR"
 # mkdir report
 
 ls old_bench
+python3 -m venv .venv
 $(pwd)/.venv/bin/python -m uv sync --no-dev
     # $(pwd)/.venv/bin/python -m playwright install
 #     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
