@@ -95,7 +95,7 @@ python scripts/run_all_skps.py \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
 
-python scripts/report_gen.py \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir jsons \
-       --output "$REPORT_DIR/index.html"
+# python scripts/report_gen.py \
+#        --nanobench-dir "$REPORT_DIR/nanobench" \
+#        --json-dir jsons \
+#        --output "$REPORT_DIR/index.html"
