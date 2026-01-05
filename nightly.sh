@@ -59,6 +59,14 @@ mkdir -p "$REPORT_DIR"
 # mkdir report
 
 ls old_bench
+$(pwd)/.venv/bin/python -m pip install uv
+$(pwd)/.venv/bin/python -m uv sync --no-dev
+    # $(pwd)/.venv/bin/python -m playwright install
+#     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
+$(pwd)/.venv/bin/python scripts/skp_to_json.py old_bench/ old_jsons/ ./out/Debug/skp_parser
+#     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
+
+
 
 start_xorg
 
