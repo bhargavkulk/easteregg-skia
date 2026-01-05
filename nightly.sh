@@ -75,6 +75,9 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
+cp old_jsons report/old_jsons
+cp jsons report/jsons
+
 start_xorg
 
 # $(pwd)/.venv/bin/python scripts/run_all_skps.py \
