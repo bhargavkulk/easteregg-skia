@@ -53,13 +53,11 @@ mkdir -p "$REPORT_DIR"
 # cp -r jsons "$REPORT_DIR/jsons"
 # cp benchmarks.json "$REPORT_DIR/"
 
-# rm -rf opt report
-# mkdir opt
-# mkdir report
+rm -rf opt report
+mkdir opt
+mkdir report
 
 ls old_bench
-
-
 
 # $(pwd)/.venv/bin/python -m pip install uv
 # $(pwd)/.venv/bin/python -m uv sync --no-dev
@@ -70,14 +68,14 @@ ls old_bench
 
 ls old_jsons
 
-python3 -m venv venv
-source venv/bin/activate
+# python3 -m venv venv
+# source venv/bin/activate
 
-pip install -r requirements.txt
-python scripts/benchmark_gen.py old_bench/ \
-       old_jsons/ \
-       old_benchmarks.json \
-       ./out/Debug/print_bounds
+# pip install -r requirements.txt
+# python scripts/benchmark_gen.py old_bench/ \
+#        old_jsons/ \
+#        old_benchmarks.json \
+#        ./out/Debug/print_bounds
 
 cp -r old_jsons report/old_jsons
 cp -r jsons report/jsons
@@ -85,19 +83,19 @@ cp old_benchmarks.json report/
 
 start_xorg
 
-# $(pwd)/.venv/bin/python scripts/run_all_skps.py \
-#     --skp-dir skps \
-#     --optimizer out/Debug/optimizer \
-#     --nanobench out/Debug/nanobench \
-#     --opt-dir opt \
-#     --report-dir "$REPORT_DIR" \
-#     --nanobench-dir "$REPORT_DIR/nanobench" \
-#     --json-dir jsons \
-#     --samples 100 \
-#     --renderer out/Debug/renderer \
-#     --png-dir report/pngs
+python scripts/run_all_skps.py \
+       --skp-dir old_bench \
+       --optimizer out/Debug/optimizer \
+       --nanobench out/Debug/nanobench \
+       --opt-dir opt \
+       --report-dir "$REPORT_DIR" \
+       --nanobench-dir "$REPORT_DIR/nanobench" \
+       --json-dir old_jsons \
+       --samples 100 \
+       --renderer out/Debug/renderer \
+       --png-dir report/pngs
 
-# $(pwd)/.venv/bin/python scripts/report_gen.py \
-#     --nanobench-dir "$REPORT_DIR/nanobench" \
-#     --json-dir jsons \
-#     --output "$REPORT_DIR/index.html"
+python scripts/report_gen.py \
+       --nanobench-dir "$REPORT_DIR/nanobench" \
+       --json-dir jsons \
+       --output "$REPORT_DIR/index.html"
