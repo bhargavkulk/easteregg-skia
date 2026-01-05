@@ -74,9 +74,14 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
+$(pwd)/.venv/bin/python scripts/benchmark_gen.py old_bench/ \
+      old_jsons/ \
+      old_benchmarks.json \
+      ./out/Debug/print_bounds
 
 cp -r old_jsons report/old_jsons
 cp -r jsons report/jsons
+cp old_benchmarks.json report/
 
 start_xorg
 
