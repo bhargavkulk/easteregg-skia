@@ -66,7 +66,7 @@ $(pwd)/.venv/bin/python -m uv sync --no-dev
 $(pwd)/.venv/bin/python scripts/skp_to_json.py old_bench/ old_jsons/ ./out/Debug/skp_parser
 #     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
 
-
+ls old_jsons
 
 start_xorg
 
