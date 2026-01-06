@@ -3,15 +3,20 @@
 greenlet==3.3.0
     # via playwright
 numpy==2.4.0
-    # via skia-python
+    # via
+    #   scipy
+    #   skia-python
 playwright==1.57.0
     # via easteregg-skia
 pybind11==3.0.1
     # via skia-python
 pyee==13.0.0
     # via playwright
-pyrefly==0.46.1
+pyrefly==0.47.0
+    # via easteregg-skia
 ruff==0.14.10
+scipy==1.16.3
+    # via easteregg-skia
 skia-python==138.0
     # via easteregg-skia
 typing-extensions==4.15.0

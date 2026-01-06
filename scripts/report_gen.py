@@ -6,9 +6,10 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+from scipy import stats
+
 # TODO, parse the optimzied skps to json as well, and pass that to the table
-# TODO, hover highlighting for table
-# TODO, right align the numeric columns
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,7 +56,7 @@ def format_name(name: str) -> str:
 def main() -> None:
     args = parse_args()
 
-    def collect_stats(stem: str, benchmark_name: str) -> float:
+    def collect_stats(stem: str, benchmark_name: str):
         bench_file = args.nanobench_dir / f'{stem}__nanobench.json'
 
         with bench_file.open(encoding='utf-8') as f:
@@ -64,9 +65,24 @@ def main() -> None:
         gl_data = timing_data['results'][benchmark_name]['gl']
         samples: list[float] = gl_data['samples']
 
-        return sum(samples) / len(samples)
+        return np.asarray(samples, dtype=float)
 
-    stats: list[tuple[str, float, float, float, Optional[float], Optional[str], int]] = []
+    def geom_mean(times):
+        return float(np.exp(np.mean(np.log(times))))
+
+    def pval(your_times, baseline_times):
+        your = np.asarray(your_times, dtype=float)
+        base = np.asarray(baseline_times, dtype=float)
+
+        t_stat, p_two_sided = stats.ttest_rel(np.log(your), np.log(base), nan_policy='raise')
+
+        # One-sided for H1: your < baseline
+        if t_stat < 0:
+            return p_two_sided / 2.0
+        else:
+            return 1.0 - p_two_sided / 2.0
+
+    s: list[tuple[str, float, float, float, Optional[float], Optional[str], int, float]] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -102,15 +118,22 @@ def main() -> None:
             diff_metric = run_compare(baseline_png, ee_png, diff_png)
             diff_href = f'./pngs/{diff_png.name}'
 
-        skmean = collect_stats(base_name, skrecordopt)
-        eemean = collect_stats(base_name, easteregg)
-        blmean = collect_stats(base_name, baseline)
-        stats.append((base_name, skmean, eemean, blmean, diff_metric, diff_href, length))
+        sksamples = collect_stats(base_name, skrecordopt)
+        eesamples = collect_stats(base_name, easteregg)
+        blsamples = collect_stats(base_name, baseline)
+
+        skmean = geom_mean(sksamples)
+        eemean = geom_mean(eesamples)
+        blmean = geom_mean(blsamples)
+
+        p = pval(sksamples, eesamples)
+
+        s.append((base_name, skmean, eemean, blmean, diff_metric, diff_href, length, p))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th><th>p</th></tr>'
     ]
-    for name, skmean, eemean, blmean, diff_metric, diff_href, cmds_len in stats:
+    for name, skmean, eemean, blmean, diff_metric, diff_href, cmds_len, p in s:
         speedup = skmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -128,6 +151,7 @@ def main() -> None:
             f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
+            f'<td style="text-align:end"><code>{p}</code></td>'
             '</tr>'
         )
 
