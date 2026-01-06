@@ -153,7 +153,7 @@ def main() -> None:
             f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
-            f'<td style="text-align:end"><code>{p}</code></td>'
+            f'<td style="text-align:end"><code>{p:.4g}</code></td>'
             '</tr>'
         )
 
