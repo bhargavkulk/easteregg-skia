@@ -31,6 +31,8 @@ def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
         'compare',
         '-metric',
         'AE',
+        '-fuzz',
+        '5%',  # adjust percentage as needed
         str(png1),
         str(png2),
         str(diff),
