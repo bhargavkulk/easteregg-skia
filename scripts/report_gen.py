@@ -124,7 +124,7 @@ def main() -> None:
         eemean = geom_mean(eesamples)
         blmean = geom_mean(blsamples)
 
-        p = pval(sksamples, eesamples)
+        p = pval(eesamples, sksamples)
 
         s.append((base_name, skmean, eemean, blmean, diff_metric, diff_href, length, p))
 
