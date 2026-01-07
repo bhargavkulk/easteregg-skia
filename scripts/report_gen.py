@@ -76,7 +76,7 @@ def main() -> None:
         your = np.asarray(your_times, dtype=float)
         base = np.asarray(baseline_times, dtype=float)
         t_stat, p_value = stats.ttest_rel(
-            np.log(base), np.log(your), alternative='greater', nan_policy='raise'
+            np.log(base), np.log(your), alternative='two-sided', nan_policy='raise'
         )
         return p_value
 
