@@ -75,14 +75,10 @@ def main() -> None:
     def pval(your_times, baseline_times):
         your = np.asarray(your_times, dtype=float)
         base = np.asarray(baseline_times, dtype=float)
-
-        t_stat, p_two_sided = stats.ttest_rel(np.log(your), np.log(base), nan_policy='raise')
-
-        # One-sided for H1: your < baseline
-        if t_stat < 0:
-            return p_two_sided / 2.0
-        else:
-            return 1.0 - p_two_sided / 2.0
+        t_stat, p_value = stats.ttest_rel(
+            np.log(base), np.log(your), alternative='greater', nan_policy='raise'
+        )
+        return p_value
 
     s: list[tuple[str, float, float, float, Optional[float], Optional[str], int, float]] = []
 
