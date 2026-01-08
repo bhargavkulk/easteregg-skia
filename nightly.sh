@@ -77,8 +77,7 @@ source venv/bin/activate
 #        old_benchmarks.json \
 #        ./out/Debug/print_bounds
 
-cp -r old_jsons report/old_jsons
-cp -r jsons report/jsons
+cp -r old_jsons report/jsons
 cp old_benchmarks.json report/
 
 start_xorg
