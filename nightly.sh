@@ -82,19 +82,35 @@ cp old_benchmarks.json report/
 
 start_xorg
 
-python scripts/run_all_skps.py \
-       --skp-dir old_bench \
-       --optimizer out/Debug/optimizer \
-       --nanobench out/Debug/nanobench \
-       --opt-dir opt \
-       --report-dir "$REPORT_DIR" \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
-       --samples 100 \
-       --renderer out/Debug/renderer \
-       --png-dir report/pngs
+./out/Debug/optimizer skps/GitHub__layer_18.skp opt/GitHub__layer_18__ee.skp
+./out/Debug/optimizer skps/GitHub__layer_18.skp opt/GitHub__layer_18__sk.skp --transform skrecordopt
 
-python scripts/report_gen.py \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
-       --output "$REPORT_DIR/index.html"
+./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps skps/GitHub__layer_18.skp --config gl
+./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps opt/GitHub__layer_18__ee.skp --config gl
+./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps opt/GitHub__layer_18__sk.skp --config gl
+
+./out/Debug/renderer --input skps/GitHub__layer_18.skp --output report/baseline.png
+./out/Debug/renderer --input opt/GitHub__layer_18__ee.skp --output report/ee.png
+./out/Debug/renderer --input opt/GitHub__layer_18__sk.skp --output report/sk.png
+
+cp skps/GitHub__layer_18.skp report/
+cp opt/GitHub__layer_18__ee.skp report/
+cp opt/GitHub__layer_18__sk.skp report/
+
+
+# python scripts/run_all_skps.py \
+#        --skp-dir old_bench \
+#        --optimizer out/Debug/optimizer \
+#        --nanobench out/Debug/nanobench \
+#        --opt-dir opt \
+#        --report-dir "$REPORT_DIR" \
+#        --nanobench-dir "$REPORT_DIR/nanobench" \
+#        --json-dir old_jsons \
+#        --samples 100 \
+#        --renderer out/Debug/renderer \
+#        --png-dir report/pngs
+
+# python scripts/report_gen.py \
+#        --nanobench-dir "$REPORT_DIR/nanobench" \
+#        --json-dir old_jsons \
+#        --output "$REPORT_DIR/index.html"

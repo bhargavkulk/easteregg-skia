@@ -3758,3 +3758,12 @@ test_app("print_bounds") {
     ":skia",
   ]
 }
+
+test_app("optimizebench") {
+  sources = [ "easteregg/optimize_bench.cpp" ]
+  deps = [
+    ":easteregg",
+    ":flags",
+    ":skia",
+  ]
+}

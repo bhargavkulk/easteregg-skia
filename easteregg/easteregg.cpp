@@ -1,6 +1,7 @@
 #include "easteregg/easteregg.h"
 
 #include <iostream>
+#include <sstream>
 
 #include "include/core/SkPaint.h"
 #include "src/core/SkRecord.h"
@@ -10,6 +11,8 @@
 #else
 #define DPRINT(x)
 #endif
+
+#define IS_RECORD(isRecord) records->mutate(i, isRecord)
 
 bool isPaintPlain(SkPaint* paint, bool testForOpaque) {
     if (!paint) {
@@ -33,24 +36,26 @@ void RemoveOpaqueSaveLayers::dbg() {
     DPRINT(dbgStream.str());
 }
 
-void RemoveOpaqueSaveLayers::transform(SkRecord& records) {
-    for (int i = 0; i < records.count(); i++) {
-        if (records.mutate(i, isSaveLayer)) {
+void RemoveOpaqueSaveLayers::operator()(SkRecord* records) { transform(records); }
+
+void RemoveOpaqueSaveLayers::transform(SkRecord* records) {
+    for (int i = 0; i < records->count(); i++) {
+        if (records->mutate(i, isSaveLayer)) {
             if (!state_stack.empty()) state_stack.back() = MatchState::Ignore;
             state_stack.push_back(isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
                                                                          : MatchState::Ignore);
             index_stack.push_back(i);
-        } else if (records.mutate(i, isSave)) {
+        } else if (records->mutate(i, isSave)) {
             state_stack.push_back(MatchState::Ignore);
             index_stack.push_back(i);
-        } else if (records.mutate(i, isDraw)) {
+        } else if (records->mutate(i, isDraw)) {
             if (state_stack.empty() || state_stack.back() == MatchState::Ignore) {
                 continue;
             }
             if (!isPaintPlain(isDraw.get(), false)) {
                 state_stack.back() = MatchState::Ignore;
             }
-        } else if (records.mutate(i, isRestore)) {
+        } else if (records->mutate(i, isRestore)) {
             if (state_stack.empty()) {
                 continue;
             }
@@ -60,10 +65,23 @@ void RemoveOpaqueSaveLayers::transform(SkRecord& records) {
             index_stack.pop_back();
 
             if (state == MatchState::Matching) {
-                records.replace<SkRecords::Save>(index);
+                records->replace<SkRecords::Save>(index);
             }
         }
     }
 }
 
-std::string RemoveOpaqueSaveLayers::str() const { return log.str(); }
+// bool RemoveLoneLuma::isLumaLayer(SkPaint* paint) { return paint-> }
+
+void RemoveLoneLuma::transform(SkRecord* records) {
+    for (int i = 0; i < records->count(); i++) {
+        if (IS_RECORD(isSaveLayer)) {
+            if (!state_stack.empty()) {
+                state_stack.back() = MatchState::OuterSaveLayer;
+            } else if (state_stack.back() == MatchState::Ignore) {
+                state_stack.push_back(MatchState::OuterSaveLayer);
+            } else if (state_stack.back() == MatchState::OuterSaveLayer) {
+            }
+        }
+    }
+}
