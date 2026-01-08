@@ -85,9 +85,9 @@ start_xorg
 ./out/Debug/optimizer --input skps/GitHub__layer_18.skp --output opt/GitHub__layer_18__ee.skp
 ./out/Debug/optimizer --input skps/GitHub__layer_18.skp --output opt/GitHub__layer_18__sk.skp --transform skrecordopt
 
-./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps skps/GitHub__layer_18.skp --config gl
-./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps opt/GitHub__layer_18__ee.skp --config gl
-./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps opt/GitHub__layer_18__sk.skp --config gl
+./out/Debug/nanobench --sourceType skp --benchType playback --samples 100 --skps skps/GitHub__layer_18.skp --config gl
+./out/Debug/nanobench --sourceType skp --benchType playback --samples 100 --skps opt/GitHub__layer_18__ee.skp --config gl
+./out/Debug/nanobench --sourceType skp --benchType playback --samples 100 --skps opt/GitHub__layer_18__sk.skp --config gl
 
 ./out/Debug/renderer --input skps/GitHub__layer_18.skp --output report/baseline.png
 ./out/Debug/renderer --input opt/GitHub__layer_18__ee.skp --output report/ee.png
