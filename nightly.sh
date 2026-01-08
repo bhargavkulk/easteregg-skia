@@ -82,8 +82,8 @@ cp old_benchmarks.json report/
 
 start_xorg
 
-./out/Debug/optimizer skps/GitHub__layer_18.skp opt/GitHub__layer_18__ee.skp
-./out/Debug/optimizer skps/GitHub__layer_18.skp opt/GitHub__layer_18__sk.skp --transform skrecordopt
+./out/Debug/optimizer --input skps/GitHub__layer_18.skp --output opt/GitHub__layer_18__ee.skp
+./out/Debug/optimizer --input skps/GitHub__layer_18.skp --output opt/GitHub__layer_18__sk.skp --transform skrecordopt
 
 ./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps skps/GitHub__layer_18.skp --config gl
 ./out/Debug/nanobench --sourceType skp --benchType --playback --samples 100 --skps opt/GitHub__layer_18__ee.skp --config gl
@@ -96,7 +96,6 @@ start_xorg
 cp skps/GitHub__layer_18.skp report/
 cp opt/GitHub__layer_18__ee.skp report/
 cp opt/GitHub__layer_18__sk.skp report/
-
 
 # python scripts/run_all_skps.py \
 #        --skp-dir old_bench \
