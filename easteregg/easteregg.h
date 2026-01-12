@@ -13,6 +13,7 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque = true);
 struct RemoveOpaqueSaveLayers {
     void operator()(SkRecord* records);
     void transform(SkRecord* records);
+
 private:
     enum class MatchState { Matching, Ignore };
 
@@ -70,7 +71,7 @@ private:
 //          :ruleset opt)
 //
 // Observation: Empty as bot indidicates these are 2 save layers next to each
-//              other, or its the first save layer in a program
+// other, or its the first save layer in a program
 // Assumptions: None! should be an easy win
 // * Skia
 // SaveLayer:
@@ -83,60 +84,27 @@ private:
 
 struct RemoveLoneLuma {
     void transform(SkRecord* records);
-
-    //        ┌────────────────────┐
-    //        │       Start        │ ─┐
-    //        └────────────────────┘  │
-    //          │                     │
-    //          │ !SaveLayer          │
-    //          ▼                     │
-    //        ┌────────────────────┐  │
-    // ┌────▶ │       Ignore       │  │
-    // │      └────────────────────┘  │
-    // │        │                     │
-    // │ Draw   │ SaveLayer           │ SaveLayer
-    // │        ▼                     ▼
-    // │      ┌─────────────────────────────────────────┐   Clip/Transform/SaveLayer
-    // │      │                                         │ ───────────────────────────┐
-    // │      │             OuterSaveLayer              │                            │
-    // └───── │                                         │ ◀──────────────────────────┘
-    //        └─────────────────────────────────────────┘
-    //          │
-    //          │ SaveLayer(SkLuma)
-    //          ▼
-    //        ┌────────────────────┐
-    //        │     LumaLayer      │
-    //        └────────────────────┘
-    //          │
-    //          │ Draw
-    //          ▼
-    //        ┌────────────────────┐   Clip/Transform
-    //        │                    │ ─────────────────┐
-    //        │      Matching      │                  │
-    //        │                    │ ◀────────────────┘
-    //        └────────────────────┘
-    //          │
-    //          │ Restore
-    //          ▼
-    //        ┌────────────────────┐
-    //        │      Matched       │
-    //        └────────────────────┘
+    void operator()(SkRecord* records) { transform(records); }
 
 private:
-    enum class MatchState {
-        OuterSaveLayer,
-        Ignore,
+    struct MatchState {
+        enum {
+            MatchSaveLayer,
+            MatchDraw,
+            Ignore,
+        } state;
+        int index;
+        int saveCount;
+        int ptr;
+        SkPaint* paint;
     };
 
     skia_private::STArray<8, MatchState> state_stack;
-    skia_private::STArray<8, int> index_stack;
 
     SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
     SkRecords::Is<SkRecords::Save> isSave;
     SkRecords::Is<SkRecords::Restore> isRestore;
     SkRecords::IsSingleDraw isDraw;
-
-    bool isLumaLayer(SkPaint* paint);
 };
 
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_

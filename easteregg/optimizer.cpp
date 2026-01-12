@@ -91,8 +91,10 @@ int main(int argc, char** argv) {
     const std::string transform = FLAGS_transform[0];
 
     if (transform == "easteregg") {
-        RemoveOpaqueSaveLayers opt;
-        opt.transform(records);
+        RemoveOpaqueSaveLayers opt1;
+        RemoveLoneLuma opt2;
+        opt1.transform(&records);
+        opt2.transform(&records);
 
         auto optimizedPicture = PictureFromRecord(records, bounds);
         if (!writePictureToSkp(optimizedPicture, outputPath)) {
