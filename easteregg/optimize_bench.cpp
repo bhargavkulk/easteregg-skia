@@ -225,6 +225,12 @@ int main(int argc, char** argv) {
 
     for (const auto& benchmark : benchmarks) {
         RemoveOpaqueSaveLayers opt;
+        RemoveLoneLuma opt2;
+        // std::function<void(SkRecord*)> opt = [opt1, opt2](SkRecord* record) {
+        //     opt1.transform(record);
+        //     opt2.transform(record);
+        // };
+
         int easteregg_loops = calculate_loops(timerOverhead, benchmark.picture, opt);
         if (easteregg_loops < 1) {
             SkDebugf("Failed to calibrate loops for %s (RemoveOpaqueSaveLayers)\n",

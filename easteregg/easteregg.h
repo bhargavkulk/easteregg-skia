@@ -12,23 +12,23 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque = true);
 
 struct RemoveOpaqueSaveLayers {
     void operator()(SkRecord* records);
-    void transform(SkRecord* records);
+    void transform(SkRecord* records) const;
 
 private:
     enum class MatchState { Matching, Ignore };
 
     void dbg();
 
-    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
-    SkRecords::Is<SkRecords::Save> isSave;
-    SkRecords::Is<SkRecords::Restore> isRestore;
-    SkRecords::IsSingleDraw isDraw;
-    skia_private::STArray<8, MatchState> state_stack;
-    skia_private::STArray<8, int> index_stack;
+    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    mutable SkRecords::Is<SkRecords::Save> isSave;
+    mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::IsSingleDraw isDraw;
+    mutable skia_private::STArray<8, MatchState> state_stack;
+    mutable skia_private::STArray<8, int> index_stack;
 };
 
 // * λskia
-// (rewrite (SaveLayer (Draw (Empty) shape (Paint (Color a r g b) (SrcOver) style (IdFilter) i1) clip transform)
+// (rewrite (SaveLayer (Draw (Empty) shape (Paint (Color a r g b) (SrcOver) style (IdFilter) i1) clip transform')
 //                     (Draw (Empty) shape (Paint (LinearGradient true) (SrcOver) style (IdFilter) i2) clip transform)
 //                     (Paint (Color 1.0 r1 g1 b1) (DstIn) nostyle (IdFilter) i3))
 //          (Draw (Empty) shape (Paint (Color a r g b) (SrcOver) style (IdFilter) i1) clip transform)
@@ -36,11 +36,6 @@ private:
 //
 // Observations: If the layer under bottom is Empty, then the immediate preceeding command has to
 //               either be a SaveLayer or nothing (the draw is the first command of the program)
-// Assumptions: The clips (and transforms) are the same. Given how these match rules exist in our
-//              benchmarks, I think this is always true? (λskia also simplifies clips, but again
-//              what I think is that even if we dont simplify we can assume they are the same. These
-//              assumptions weaken the correctness claim. BUT, it also hard to implement math as is
-//              in code.)
 // * Skia
 // SaveLayer:
 //   Draw shape solidfill idfilter
@@ -53,14 +48,28 @@ private:
 //   NoOp
 
 struct GradientDstInToMasks {
-    void transform(SkRecord& records);
+    void transform(SkRecord* records) const;
 
 private:
-    enum class MatchState { Matching, Ignore };
+    struct MatchState {
+        enum {
+            MatchOuter,
+            MatchInner,
+            Match,
+            Ignore,
+        } state;
+        int index;
+        int saveCount;
+        int ptr;
+        SkPaint* paint;
+    };
 
-    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
-    SkRecords::Is<SkRecords::Save> isSave;
-    SkRecords::IsSingleDraw isDraw;
+    mutable skia_private::STArray<8, MatchState> state_stack;
+
+    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    mutable SkRecords::Is<SkRecords::Save> isSave;
+    mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::IsSingleDraw isDraw;
 };
 
 // * λskia
@@ -83,8 +92,8 @@ private:
 //     Draw (Color black)
 
 struct RemoveLoneLuma {
-    void transform(SkRecord* records);
-    void operator()(SkRecord* records) { transform(records); }
+    void transform(SkRecord* records) const;
+    void operator()(SkRecord* records) const { transform(records); }
 
 private:
     struct MatchState {
@@ -99,12 +108,12 @@ private:
         SkPaint* paint;
     };
 
-    skia_private::STArray<8, MatchState> state_stack;
+    mutable skia_private::STArray<8, MatchState> state_stack;
 
-    SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
-    SkRecords::Is<SkRecords::Save> isSave;
-    SkRecords::Is<SkRecords::Restore> isRestore;
-    SkRecords::IsSingleDraw isDraw;
+    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    mutable SkRecords::Is<SkRecords::Save> isSave;
+    mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::IsSingleDraw isDraw;
 };
 
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_

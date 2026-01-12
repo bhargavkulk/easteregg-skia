@@ -2,8 +2,6 @@
 
 #include "include/core/SkColor.h"
 #include "include/core/SkPaint.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecords.h"
 #include "src/core/SkRuntimeEffectPriv.h"
@@ -80,7 +78,7 @@ bool isPaintLumaLayer(SkPaint* paint) {
 
 void RemoveOpaqueSaveLayers::operator()(SkRecord* records) { transform(records); }
 
-void RemoveOpaqueSaveLayers::transform(SkRecord* records) {
+void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
     for (int i = 0; i < records->count(); i++) {
         if (records->mutate(i, isSaveLayer)) {
             if (!state_stack.empty()) state_stack.back() = MatchState::Ignore;
@@ -113,7 +111,17 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) {
     }
 }
 
-void RemoveLoneLuma::transform(SkRecord* records) {
+void GradientDstInToMasks::transform(SkRecord* records) const {
+    for (int i = 0; i < records->count(); i++) {
+        if (IS_RECORD(isSaveLayer)) {
+        } else if (IS_RECORD(isSave)) {
+        } else if (IS_RECORD(isDraw)) {
+        } else if (IS_RECORD(isRestore)) {
+        }
+    }
+}
+
+void RemoveLoneLuma::transform(SkRecord* records) const {
     int saveCount = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
@@ -153,11 +161,8 @@ void RemoveLoneLuma::transform(SkRecord* records) {
             }
 
             if (state_stack.back().state == MatchState::MatchDraw) {
-                SkASSERT(state_stack.back().paint);
-                auto [state, index, _saveCount, ptr, paint] = state_stack.back();
-                records->replace<SkRecords::SaveLayer>(index);
-                paint->setColor4f(SkColors::kBlack);
-                SkDebugf("Matched! %d\n", state_stack.back().ptr);
+                records->replace<SkRecords::SaveLayer>(state_stack.back().index);
+                state_stack.back().paint->setColor4f(SkColors::kBlack);
             }
 
             state_stack.pop_back();
