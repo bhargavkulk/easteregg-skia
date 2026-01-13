@@ -93,8 +93,9 @@ int main(int argc, char** argv) {
     if (transform == "easteregg") {
         RemoveOpaqueSaveLayers opt1;
         RemoveLoneLuma opt2;
-        opt1.transform(&records);
-        opt2.transform(&records);
+        GradientDstInToMasks opt3;
+
+        opt3.transform(&records);
 
         auto optimizedPicture = PictureFromRecord(records, bounds);
         if (!writePictureToSkp(optimizedPicture, outputPath)) {

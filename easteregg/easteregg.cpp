@@ -2,6 +2,7 @@
 
 #include "include/core/SkColor.h"
 #include "include/core/SkPaint.h"
+#include "include/private/base/SkDebug.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecords.h"
 #include "src/core/SkRuntimeEffectPriv.h"
@@ -151,39 +152,68 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
 }
 
 void GradientDstInToMasks::transform(SkRecord* records) const {
+    auto stateName = [](int state) {
+        switch (state) {
+            case MatchState::OuterLayer:
+                return "OuterLayer";
+            case MatchState::OuterFill:
+                return "OuterFill";
+            case MatchState::MaskLayer:
+                return "MaskLayer";
+            case MatchState::MaskFill:
+                return "MaskFill";
+            case MatchState::Ignore:
+                return "Ignore";
+            default:
+                return "Unknown";
+        }
+    };
+
+    auto setState = [&](MatchState* frame, int newState, int i) {
+        if (frame->state == newState) {
+            return;
+        }
+        SkDebugf("GradientDstInToMasks: i=%d %s -> %s\n",
+                 i,
+                 stateName(frame->state),
+                 stateName(newState));
+        frame->state = static_cast<decltype(frame->state)>(newState);
+    };
+
+    auto pushState = [&](int state, int saveLayerIndex, int saveCount, SkPaint* paint, int i) {
+        SkDebugf("GradientDstInToMasks: i=%d push %s (saveLayer=%d)\n",
+                 i,
+                 stateName(state),
+                 saveLayerIndex);
+        state_stack.push_back({
+                static_cast<decltype(MatchState{}.state)>(state),
+                saveLayerIndex,
+                saveCount,
+                paint,
+        });
+    };
+
     int saveCount = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
             SkPaint* paint = isSaveLayer.get()->paint;
 
             const bool matchesInner = !state_stack.empty() &&
-                                      state_stack.back().state == MatchState::MatchInner &&
+                                      state_stack.back().state == MatchState::OuterFill &&
                                       isPaintDstInMask(paint);
             if (matchesInner) {
-                state_stack.back().state = MatchState::Ignore;
-                state_stack.push_back({
-                        MatchState::Match,
-                        i,
-                        saveCount,
-                        -1,
-                        nullptr,
-                });
+                setState(&state_stack.back(), MatchState::Ignore, i);
+                pushState(MatchState::MaskLayer, i, saveCount, nullptr, i);
                 continue;
             }
 
             if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
-                state_stack.back().state = MatchState::Ignore;
+                setState(&state_stack.back(), MatchState::Ignore, i);
             }
-            state_stack.push_back({
-                    MatchState::MatchOuter,
-                    i,
-                    saveCount,
-                    -1,
-                    nullptr,
-            });
+            pushState(MatchState::OuterLayer, i, saveCount, nullptr, i);
         } else if (IS_RECORD(isSave)) {
             if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
-                state_stack.back().state = MatchState::Ignore;
+                setState(&state_stack.back(), MatchState::Ignore, i);
             }
             saveCount += 1;
         } else if (IS_RECORD(isRestore)) {
@@ -196,36 +226,39 @@ void GradientDstInToMasks::transform(SkRecord* records) const {
                 saveCount -= 1;
                 continue;
             }
-            if (state_stack.back().state == MatchState::Match &&
-                state_stack.back().gradientDrawIndex != -1) {
-                records->replace<SkRecords::NoOp>(state_stack.back().saveLayerIndex);
-                records->replace<SkRecords::NoOp>(state_stack.back().gradientDrawIndex);
-                records->replace<SkRecords::NoOp>(i);
+            if (state_stack.back().state == MatchState::MaskFill) {
+                SkDebugf("GradientDstInToMasks matched: saveLayer=%d restore=%d\n",
+                         state_stack.back().saveLayerIndex,
+                         i);
             }
 
+            SkDebugf("GradientDstInToMasks: i=%d pop %s (saveLayer=%d)\n",
+                     i,
+                     stateName(state_stack.back().state),
+                     state_stack.back().saveLayerIndex);
             state_stack.pop_back();
         } else if (IS_RECORD(isDraw)) {
             if (state_stack.empty() || state_stack.back().state == MatchState::Ignore) {
                 continue;
-            } else if (state_stack.back().state == MatchState::MatchOuter) {
+            } else if (state_stack.back().state == MatchState::OuterLayer) {
                 if (isPaintPlain(isDraw.get(), false)) {
-                    state_stack.back().state = MatchState::MatchInner;
+                    setState(&state_stack.back(), MatchState::OuterFill, i);
                 } else {
-                    state_stack.back().state = MatchState::Ignore;
+                    setState(&state_stack.back(), MatchState::Ignore, i);
                 }
-            } else if (state_stack.back().state == MatchState::MatchInner) {
-                state_stack.back().state = MatchState::Ignore;
-            } else if (state_stack.back().state == MatchState::Match) {
-                if (state_stack.back().gradientDrawIndex != -1) {
-                    state_stack.back().state = MatchState::Ignore;
-                } else if (isPaintOpaqueLinearOrRadialGradient(isDraw.get())) {
-                    state_stack.back().gradientDrawIndex = i;
+            } else if (state_stack.back().state == MatchState::OuterFill) {
+                setState(&state_stack.back(), MatchState::Ignore, i);
+            } else if (state_stack.back().state == MatchState::MaskLayer) {
+                if (isPaintOpaqueLinearOrRadialGradient(isDraw.get())) {
+                    setState(&state_stack.back(), MatchState::MaskFill, i);
                 } else {
-                    state_stack.back().state = MatchState::Ignore;
+                    setState(&state_stack.back(), MatchState::Ignore, i);
                 }
+            } else if (state_stack.back().state == MatchState::MaskFill) {
+                setState(&state_stack.back(), MatchState::Ignore, i);
             }
         } else if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
-            state_stack.back().state = MatchState::Ignore;
+            setState(&state_stack.back(), MatchState::Ignore, i);
         }
     }
 }

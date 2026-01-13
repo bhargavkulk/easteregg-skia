@@ -53,14 +53,14 @@ struct GradientDstInToMasks {
 private:
     struct MatchState {
         enum {
-            MatchOuter,
-            MatchInner,
-            Match,
+            OuterLayer,
+            OuterFill,
+            MaskLayer,
+            MaskFill,
             Ignore,
         } state;
         int saveLayerIndex;
         int saveCount;
-        int gradientDrawIndex;  // ptr → gradientDrawIndex
         SkPaint* paint;
     };
 
