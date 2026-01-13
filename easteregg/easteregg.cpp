@@ -16,7 +16,7 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque) {
         return true;
     }
 
-    auto shader = paint->getShader();
+    if (paint) auto shader = paint->getShader();
 
     if (paint->getShader() || paint->getColorFilter() || paint->getImageFilter() ||
         paint->getMaskFilter()) {
