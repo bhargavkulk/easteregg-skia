@@ -58,9 +58,9 @@ private:
             Match,
             Ignore,
         } state;
-        int index;
+        int saveLayerIndex;
         int saveCount;
-        int ptr;
+        int gradientDrawIndex;  // ptr → gradientDrawIndex
         SkPaint* paint;
     };
 

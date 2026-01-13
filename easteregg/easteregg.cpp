@@ -6,6 +6,7 @@
 #include "src/core/SkRecords.h"
 #include "src/core/SkRuntimeEffectPriv.h"
 #include "src/effects/colorfilters/SkColorFilterBase.h"
+#include "src/shaders/SkShaderBase.h"
 
 #define IS_RECORD(isRecord) records->mutate(i, isRecord)
 
@@ -76,6 +77,44 @@ bool isPaintLumaLayer(SkPaint* paint) {
     return false;
 }
 
+bool isPaintDstInMask(SkPaint* paint) {
+    if (!paint) {
+        return false;
+    }
+
+    if (paint->getPathEffect() || paint->getShader() || paint->getMaskFilter() ||
+        paint->getColorFilter() || paint->getImageFilter()) {
+        return false;
+    }
+
+    const auto blendMode = paint->asBlendMode();
+    if (!blendMode || blendMode.value() != SkBlendMode::kDstIn) {
+        return false;
+    }
+
+    return paint->getAlphaf() == 1.0f;
+}
+
+bool isPaintOpaqueLinearOrRadialGradient(SkPaint* paint) {
+    if (!paint) {
+        return false;
+    }
+
+    if (paint->getPathEffect() || paint->getMaskFilter() || paint->getColorFilter() ||
+        paint->getImageFilter() || !paint->isSrcOver()) {
+        return false;
+    }
+
+    SkShader* shader = paint->getShader();
+    if (!shader || !shader->isOpaque()) {
+        return false;
+    }
+
+    const SkShaderBase::GradientType type = as_SB(shader)->asGradient();
+    return type == SkShaderBase::GradientType::kLinear ||
+           type == SkShaderBase::GradientType::kRadial;
+}
+
 void RemoveOpaqueSaveLayers::operator()(SkRecord* records) { transform(records); }
 
 void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
@@ -112,11 +151,81 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
 }
 
 void GradientDstInToMasks::transform(SkRecord* records) const {
+    int saveCount = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
+            SkPaint* paint = isSaveLayer.get()->paint;
+
+            const bool matchesInner = !state_stack.empty() &&
+                                      state_stack.back().state == MatchState::MatchInner &&
+                                      isPaintDstInMask(paint);
+            if (matchesInner) {
+                state_stack.back().state = MatchState::Ignore;
+                state_stack.push_back({
+                        MatchState::Match,
+                        i,
+                        saveCount,
+                        -1,
+                        nullptr,
+                });
+                continue;
+            }
+
+            if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
+                state_stack.back().state = MatchState::Ignore;
+            }
+            state_stack.push_back({
+                    MatchState::MatchOuter,
+                    i,
+                    saveCount,
+                    -1,
+                    nullptr,
+            });
         } else if (IS_RECORD(isSave)) {
-        } else if (IS_RECORD(isDraw)) {
+            if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
+                state_stack.back().state = MatchState::Ignore;
+            }
+            saveCount += 1;
         } else if (IS_RECORD(isRestore)) {
+            if (state_stack.empty()) {
+                SkASSERTF(saveCount > 0, "unbalanced restore at command %d", i);
+                saveCount -= 1;
+                continue;
+            }
+            if (state_stack.back().saveCount < saveCount) {
+                saveCount -= 1;
+                continue;
+            }
+            if (state_stack.back().state == MatchState::Match &&
+                state_stack.back().gradientDrawIndex != -1) {
+                records->replace<SkRecords::NoOp>(state_stack.back().saveLayerIndex);
+                records->replace<SkRecords::NoOp>(state_stack.back().gradientDrawIndex);
+                records->replace<SkRecords::NoOp>(i);
+            }
+
+            state_stack.pop_back();
+        } else if (IS_RECORD(isDraw)) {
+            if (state_stack.empty() || state_stack.back().state == MatchState::Ignore) {
+                continue;
+            } else if (state_stack.back().state == MatchState::MatchOuter) {
+                if (isPaintPlain(isDraw.get(), false)) {
+                    state_stack.back().state = MatchState::MatchInner;
+                } else {
+                    state_stack.back().state = MatchState::Ignore;
+                }
+            } else if (state_stack.back().state == MatchState::MatchInner) {
+                state_stack.back().state = MatchState::Ignore;
+            } else if (state_stack.back().state == MatchState::Match) {
+                if (state_stack.back().gradientDrawIndex != -1) {
+                    state_stack.back().state = MatchState::Ignore;
+                } else if (isPaintOpaqueLinearOrRadialGradient(isDraw.get())) {
+                    state_stack.back().gradientDrawIndex = i;
+                } else {
+                    state_stack.back().state = MatchState::Ignore;
+                }
+            }
+        } else if (!state_stack.empty() && state_stack.back().state != MatchState::Ignore) {
+            state_stack.back().state = MatchState::Ignore;
         }
     }
 }
