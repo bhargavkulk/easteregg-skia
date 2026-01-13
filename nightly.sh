@@ -37,6 +37,7 @@ fi
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
+./out/Debug/optimizer --input old_bench/Pinterest__layer_106.skp --output test.skp
 
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
@@ -57,8 +58,6 @@ rm -rf opt report
 mkdir opt
 mkdir report
 
-ls old_bench
-
 # $(pwd)/.venv/bin/python -m pip install uv
 # $(pwd)/.venv/bin/python -m uv sync --no-dev
 #     # $(pwd)/.venv/bin/python -m playwright install
@@ -66,10 +65,8 @@ ls old_bench
 # $(pwd)/.venv/bin/python scripts/skp_to_json.py old_bench/ old_jsons/ ./out/Debug/skp_parser
 # #     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
 
-ls old_jsons
-
-python3 -m venv venv
-source venv/bin/activate
+# python3 -m venv venv
+# source venv/bin/activate
 
 # pip install -r requirements.txt
 # python scripts/benchmark_gen.py old_bench/ \
@@ -77,24 +74,24 @@ source venv/bin/activate
 #        old_benchmarks.json \
 #        ./out/Debug/print_bounds
 
-cp -r old_jsons report/jsons
-cp old_benchmarks.json report/
+# cp -r old_jsons report/jsons
+# cp old_benchmarks.json report/
 
 start_xorg
 
-python scripts/run_all_skps.py \
-       --skp-dir old_bench \
-       --optimizer out/Debug/optimizer \
-       --nanobench out/Debug/nanobench \
-       --opt-dir opt \
-       --report-dir "$REPORT_DIR" \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
-       --samples 100 \
-       --renderer out/Debug/renderer \
-       --png-dir report/pngs
+# python scripts/run_all_skps.py \
+#        --skp-dir old_bench \
+#        --optimizer out/Debug/optimizer \
+#        --nanobench out/Debug/nanobench \
+#        --opt-dir opt \
+#        --report-dir "$REPORT_DIR" \
+#        --nanobench-dir "$REPORT_DIR/nanobench" \
+#        --json-dir old_jsons \
+#        --samples 100 \
+#        --renderer out/Debug/renderer \
+#        --png-dir report/pngs
 
-python scripts/report_gen.py \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
-       --output "$REPORT_DIR/index.html"
+# python scripts/report_gen.py \
+#        --nanobench-dir "$REPORT_DIR/nanobench" \
+#        --json-dir old_jsons \
+#        --output "$REPORT_DIR/index.html"
