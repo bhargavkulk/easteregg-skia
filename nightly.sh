@@ -66,10 +66,10 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
-python scripts/benchmark_gen.py old_bench/ \
-       old_jsons/ \
-       old_benchmarks.json \
-       ./out/Debug/print_bounds
+# python scripts/benchmark_gen.py old_bench/ \
+#        old_jsons/ \
+#        old_benchmarks.json \
+#        ./out/Debug/print_bounds
 
 cp -r old_jsons report/jsons
 cp old_benchmarks.json report/
