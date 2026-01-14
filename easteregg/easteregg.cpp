@@ -267,7 +267,7 @@ void RemoveLoneLuma::transform(SkRecord* records) const {
             }
 
             if (state_stack.back().state == MatchState::MatchDraw) {
-                records->replace<SkRecords::SaveLayer>(state_stack.back().index);
+                records->replace<SkRecords::Save>(state_stack.back().index);
                 state_stack.back().paint->setColor4f(SkColors::kBlack);
             }
 
