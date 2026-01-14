@@ -95,6 +95,7 @@ int main(int argc, char** argv) {
         RemoveLoneLuma opt2;
         GradientDstInToMasks opt3;
 
+        opt3.transform(&records);
         opt2.transform(&records);
         opt1.transform(&records);
 
