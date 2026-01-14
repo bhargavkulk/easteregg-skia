@@ -1,5 +1,7 @@
 import argparse
+import base64
 import html
+import io
 import json
 import re
 import subprocess
@@ -53,6 +55,61 @@ def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
 
 def format_name(name: str) -> str:
     return name.replace('__', ' | ').replace('_', ' ')
+
+def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
+    ratios = np.asarray(ratios, dtype=float)
+    ratios = ratios[np.isfinite(ratios) & (ratios > 0)]
+    n = int(ratios.size)
+    if n == 0:
+        return '<p>No speed ratios to plot.</p>', None
+
+    try:
+        import matplotlib
+
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return '<p>matplotlib is not available; cannot render the CDF plot.</p>', None
+
+    ratios.sort()
+    y = np.arange(1, n + 1, dtype=float) / n
+
+    q_low = float(np.quantile(ratios, 0.05))
+    q_high = float(np.quantile(ratios, 0.95))
+    x_min = min(q_low, 1.0, float(ratios[0]))
+    x_max = max(q_high, 1.0, float(ratios[-1]))
+    if x_min == x_max:
+        x_min -= 0.05
+        x_max += 0.05
+    pad = 0.05 * (x_max - x_min)
+    x_min -= pad
+    x_max += pad
+
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    ax.step(ratios, y, where='post', linewidth=2, color='#1f77b4')
+    ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--')
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(0.0, 1.0)
+    ax.grid(True, which='both', color='#eee')
+    ax.set_xlabel('Baseline / Optimized')
+    ax.set_ylabel('Fraction of benchmarks ≤ x')
+    ax.set_title(f'Empirical CDF of speed ratios (n={n})', loc='left', fontsize=10)
+
+    fig.tight_layout()
+    png_buf = io.BytesIO()
+    fig.savefig(png_buf, format='png', bbox_inches='tight')
+    svg_buf = io.BytesIO()
+    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
+    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
+
+    img_html = (
+        '<img alt="Speed ratio CDF plot" style="max-width:100%;height:auto" '
+        f'src="data:image/png;base64,{img_b64}"/>'
+    )
+    return img_html, svg_text
 
 
 def main() -> None:
@@ -154,8 +211,30 @@ def main() -> None:
         )
 
     body_content = (
-        '\n'.join(table_rows) if stats else '<p>No benchmarks with save layers were found.</p>'
+        '\n'.join(table_rows) if s else '<p>No benchmarks with save layers were found.</p>'
     )
+
+    # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
+    ratios = np.asarray([blmean / eemean for _name, _sk, eemean, blmean, *_rest in s], dtype=float)
+    cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios)
+    cdf_svg_href = None
+    if cdf_svg_text:
+        assets_dir = args.output.parent / 'assets'
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        cdf_svg_path = assets_dir / 'speed_ratio_cdf.svg'
+        cdf_svg_path.write_text(cdf_svg_text, encoding='utf-8')
+        cdf_svg_href = f'./assets/{cdf_svg_path.name}'
+
+    if cdf_svg_href:
+        cdf_plot = (
+            cdf_png_html
+            + '<p style="margin-top:8px">'
+            + f'<a class="button" download="{html.escape(Path(cdf_svg_href).name)}" href="{html.escape(cdf_svg_href)}">'
+            + 'Download SVG</a>'
+            + '</p>'
+        )
+    else:
+        cdf_plot = cdf_png_html
 
     html_output = f"""<!DOCTYPE html>
 <html>
@@ -185,6 +264,19 @@ table td {{
 table tr:hover {{
     background-color: #d3d3d3;
 }}
+.button {{
+    display: inline-block;
+    padding: 6px 10px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #f2f2f2;
+    color: #222;
+    text-decoration: none;
+    font-size: 14px;
+}}
+.button:hover {{
+    background: #e6e6e6;
+}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
 </head>
@@ -194,6 +286,9 @@ table tr:hover {{
 <table class="table-sort table-arrows remember-sort">
 {body_content}
 </table>
+<h2>Baseline vs Optimized Speed Ratios</h2>
+<p>Each benchmark contributes one point: <code>baseline_geomean / optimized_geomean</code>. Values &gt; 1 mean optimized is faster.</p>
+{cdf_plot}
 </body>
 </html>
 """
