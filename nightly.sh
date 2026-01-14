@@ -28,6 +28,8 @@ start_xorg() {
     sleep 2
 }
 
+rm -rf out
+
 trap stop_xorg EXIT
 
 if [ ! -d "out/Debug" ]; then
