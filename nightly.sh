@@ -37,8 +37,6 @@ fi
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
 
-./out/Debug/optimizer --input old_bench/Pinterest__layer_106.skp --output test.skp
-
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
 
@@ -77,18 +75,18 @@ cp old_benchmarks.json report/
 start_xorg
 
 python scripts/run_all_skps.py \
-       --skp-dir old_bench \
+       --skp-dir bench \
        --optimizer out/Debug/optimizer \
        --nanobench out/Debug/nanobench \
        --opt-dir opt \
        --report-dir "$REPORT_DIR" \
        --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
+       --json-dir jsons \
        --samples 100 \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
 
 python scripts/report_gen.py \
        --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir old_jsons \
+       --json-dir jsons \
        --output "$REPORT_DIR/index.html"
