@@ -75,18 +75,18 @@ cp old_benchmarks.json report/
 start_xorg
 
 python scripts/run_all_skps.py \
-       --skp-dir bench \
+       --skp-dir old_bench/ \
        --optimizer out/Debug/optimizer \
        --nanobench out/Debug/nanobench \
        --opt-dir opt \
        --report-dir "$REPORT_DIR" \
        --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir jsons \
+       --json-dir old_jsons/ \
        --samples 100 \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
 
 python scripts/report_gen.py \
        --nanobench-dir "$REPORT_DIR/nanobench" \
-       --json-dir jsons \
+       --json-dir old_jsons \
        --output "$REPORT_DIR/index.html"
