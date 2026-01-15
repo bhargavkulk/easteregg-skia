@@ -137,7 +137,7 @@ def main() -> None:
         )
         return p_value
 
-    s: list[tuple[str, float, float, float, Optional[float], Optional[str], int, float]] = []
+    s: list[tuple[str, float, float, Optional[float], Optional[str], int, float]] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -159,7 +159,6 @@ def main() -> None:
 
         base_name = json_path.stem
         suffix = f'.skp_1_{width}_{height}'
-        skrecordopt = f'{base_name}__sk{suffix}'
         easteregg = f'{base_name}__ee{suffix}'
         baseline = f'{base_name}{suffix}'
 
@@ -173,23 +172,21 @@ def main() -> None:
             diff_metric = run_compare(baseline_png, ee_png, diff_png)
             diff_href = f'./pngs/{diff_png.name}'
 
-        sksamples = collect_stats(base_name, skrecordopt)
         eesamples = collect_stats(base_name, easteregg)
         blsamples = collect_stats(base_name, baseline)
 
-        skmean = geom_mean(sksamples)
         eemean = geom_mean(eesamples)
         blmean = geom_mean(blsamples)
 
-        p = pval(eesamples, sksamples)
+        p = pval(eesamples, blsamples)
 
-        s.append((base_name, skmean, eemean, blmean, diff_metric, diff_href, length, p))
+        s.append((base_name, eemean, blmean, diff_metric, diff_href, length, p))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>skrecordopt</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th><th>p</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th><th>p</th></tr>'
     ]
-    for name, skmean, eemean, blmean, diff_metric, diff_href, cmds_len, p in s:
-        speedup = skmean / eemean
+    for name, eemean, blmean, diff_metric, diff_href, cmds_len, p in s:
+        speedup = blmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
         elif diff_href:
@@ -201,7 +198,6 @@ def main() -> None:
             '<tr>'
             f'<td>{html.escape(format_name(name))}</td>'
             f'<td style="text-align:end"><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
-            f'<td style="text-align:end"><code>{skmean:.3f}</code></td>'
             f'<td style="text-align:end"><code>{eemean:.3f}</code></td>'
             f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
             f'<td style="text-align:end">{diff_display}</td>'
@@ -215,7 +211,7 @@ def main() -> None:
     )
 
     # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
-    ratios = np.asarray([blmean / eemean for _name, _sk, eemean, blmean, *_rest in s], dtype=float)
+    ratios = np.asarray([blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float)
     cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios)
     cdf_svg_href = None
     if cdf_svg_text:

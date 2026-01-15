@@ -127,13 +127,10 @@ def main():
         bench_count += 1
 
         ee_output: Path = args.opt_dir / f'{stem}__ee.skp'
-        sk_output: Path = args.opt_dir / f'{stem}__sk.skp'
-
         run_optimizer(args.optimizer, skp, ee_output)
-        run_optimizer(args.optimizer, skp, sk_output, transform='skrecordopt')
 
         results_file = args.nanobench_dir / f'{stem}__nanobench.json'
-        run_nanobench(args.nanobench, [skp, ee_output, sk_output], results_file, clip, args.samples)
+        run_nanobench(args.nanobench, [skp, ee_output], results_file, clip, args.samples)
 
         ee_png: Path = args.png_dir / f'{stem}__ee.png'
         bl_png: Path = args.png_dir / f'{stem}.png'

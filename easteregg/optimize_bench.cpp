@@ -15,7 +15,6 @@
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
-#include "src/core/SkRecordOpts.h"
 #include "src/utils/SkJSONWriter.h"
 #include "src/utils/SkOSPath.h"
 #include "tools/flags/CommandLineFlags.h"
@@ -197,8 +196,6 @@ int calculate_loops(const double overhead, const sk_sp<SkPicture>& picture, Tran
     }
 }
 
-std::function<void(SkRecord*)> skRecordOpt = [](SkRecord* record) { SkRecordOptimize(record); };
-
 int main(int argc, char** argv) {
     CommandLineFlags::Parse(argc, argv);
 
@@ -208,7 +205,6 @@ int main(int argc, char** argv) {
     // save skps into skpbench
     std::vector<SKPBench> benchmarks;
     std::vector<Stats> easteregg_stats;
-    std::vector<Stats> skrecordopt_stats;
 
     for (int i = 0; i < FLAGS_skps.size(); i++) {
         SKPBench bench{SkString(FLAGS_skps[i])};
@@ -244,21 +240,6 @@ int main(int argc, char** argv) {
         }
         easteregg_stats.push_back(Stats(easteregg_samples));
         std::cout << "Easteregg Geomean " << easteregg_stats.back().geomeanSample << "ns"
-                  << std::endl;
-
-        int skrecordopt_loops = calculate_loops(timerOverhead, benchmark.picture, skRecordOpt);
-        if (skrecordopt_loops < 1) {
-            SkDebugf("Failed to calibrate loops for %s (SkRecordOptimize)\n",
-                     benchmark.name.c_str());
-            continue;
-        }
-        std::vector<double> skrecordopt_samples;
-        for (int i = 0; i < FLAGS_samples; i++) {
-            double duration = time(skrecordopt_loops, benchmark.picture, skRecordOpt, true, i);
-            skrecordopt_samples.push_back(duration / skrecordopt_loops);
-        }
-        skrecordopt_stats.push_back(Stats(skrecordopt_samples));
-        std::cout << "SkRecordOpt geomean " << skrecordopt_stats.back().geomeanSample << "ns"
                   << std::endl;
     }
 }
