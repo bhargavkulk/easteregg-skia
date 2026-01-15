@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from scipy import stats
+from scipy import stats as sp
 
 # TODO, parse the optimzied skps to json as well, and pass that to the table
 
@@ -56,6 +56,7 @@ def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
 
 def format_name(name: str) -> str:
     return name.replace('__', ' | ').replace('_', ' ')
+
 
 def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     ratios = np.asarray(ratios, dtype=float)
@@ -135,7 +136,7 @@ def main() -> None:
     def pval(your_times, baseline_times):
         your = np.asarray(your_times, dtype=float)
         base = np.asarray(baseline_times, dtype=float)
-        t_stat, p_value = stats.ttest_rel(
+        t_stat, p_value = sp.ttest_rel(
             np.log(base), np.log(your), alternative='two-sided', nan_policy='raise'
         )
         return p_value
@@ -197,14 +198,18 @@ def main() -> None:
 
         p = pval(eesamples, blsamples)
 
-        s.append((base_name,
-                  eemean,
-                  blmean,
-                  diff_metric,
-                  diff_href,
-                  length,
-                  p,
-                  optbench_by_stem.get(base_name)))
+        s.append(
+            (
+                base_name,
+                eemean,
+                blmean,
+                diff_metric,
+                diff_href,
+                length,
+                p,
+                optbench_by_stem.get(base_name),
+            )
+        )
 
     table_rows = [
         '<tr><th>Benchmark</th><th>#cmds</th><th>easteregg</th><th>baseline</th><th>optbench (ms)</th><th>diff</th><th>speedup</th><th>p</th></tr>'
@@ -240,9 +245,7 @@ def main() -> None:
     )
 
     # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
-    ratios = np.asarray(
-        [blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float
-    )
+    ratios = np.asarray([blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float)
     if isinstance(optbench_timer_overhead_ns, (int, float)):
         overhead_display = f'{optbench_timer_overhead_ns:.2f}'
     else:
