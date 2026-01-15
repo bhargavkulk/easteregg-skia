@@ -6,21 +6,19 @@
 #include <vector>
 #include "easteregg/easteregg.h"
 #include "include/core/SkPicture.h"
-#include "include/core/SkPictureRecorder.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkString.h"
 #include "include/private/base/SkDebug.h"
 #include "src/base/SkTime.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
-#include "src/core/SkRecordDraw.h"
 #include "src/utils/SkJSONWriter.h"
 #include "src/utils/SkOSPath.h"
 #include "tools/flags/CommandLineFlags.h"
 
 static DEFINE_string(
         skps, "", "A list of skps. Ensure the paths are correct. I do not do any error handling.");
-static DEFINE_string(output, "", "Output folder for skps. Only for debugging");
+static DEFINE_string(stats, "", "Output JSON stats file.");
 static DEFINE_int(samples, 100, "#samples to run");
 
 struct Stats {
@@ -74,23 +72,11 @@ struct SKPBench {
     }
 };
 
-class NanoJSONResultsWriter : public SkJSONWriter {
-public:
-    NanoJSONResultsWriter(SkWStream* stream, Mode mode) : SkJSONWriter(stream, mode) {}
-
-    void beginBench(const char* name, int32_t x, int32_t y) {
-        SkString id = SkStringPrintf("%s_%d_%d", name, x, y);
-        this->beginObject(id.c_str());
-    }
-
-    void endBench() { this->endObject(); }
-
-    void appendMetric(const char* name, double value) {
-        // Don't record if NaN or Inf.
-        if (std::isfinite(value)) {
-            this->appendDoubleDigits(name, value, 16);
-        }
-    }
+struct BenchResult {
+    SkString name;
+    SkString path;
+    SkRect bounds;
+    Stats stats;
 };
 
 static double now_ns() { return static_cast<double>(SkTime::GetNSecs()); }
@@ -104,26 +90,7 @@ double estimate_timer_overhead_ns() {
     return overhead / 100000;
 }
 
-void writeSkRecord(const SkRecord& records, const SkRect& bounds, std::string filename) {
-    SkPictureRecorder recorder;
-    SkCanvas* canvas = recorder.beginRecording(bounds);
-    if (!canvas) {
-        SkDebugf("Error making canvas");
-        return;
-    }
-
-    SkRecordDraw(records, canvas, nullptr, nullptr, 0, nullptr, nullptr);
-    sk_sp<SkPicture> picture = recorder.finishRecordingAsPicture();
-
-    SkFILEWStream stream(filename.c_str());
-    picture->serialize(&stream);
-    return;
-}
-
-double time(int loops,
-            const sk_sp<SkPicture>& picture,
-            bool write_to_file = false,
-            int sample_index = 0) {
+double time(int loops, const sk_sp<SkPicture>& picture) {
     SkRect bounds(picture->cullRect());
     std::vector<SkRecord> records(loops);
 
@@ -145,11 +112,6 @@ double time(int loops,
         opt1.transform(&records[i]);
     }
     double duration = SkTime::GetNSecs() - start;
-
-    if (write_to_file)
-        writeSkRecord(records[0],
-                      bounds,
-                      std::string(FLAGS_output[0]) + "/" + std::to_string(sample_index) + ".skp");
 
     return duration;
 }
@@ -204,7 +166,7 @@ int main(int argc, char** argv) {
 
     // save skps into skpbench
     std::vector<SKPBench> benchmarks;
-    std::vector<Stats> easteregg_stats;
+    std::vector<BenchResult> results;
 
     for (int i = 0; i < FLAGS_skps.size(); i++) {
         SKPBench bench{SkString(FLAGS_skps[i])};
@@ -222,52 +184,56 @@ int main(int argc, char** argv) {
     for (const auto& benchmark : benchmarks) {
         int easteregg_loops = calculate_loops(timerOverhead, benchmark.picture);
         if (easteregg_loops < 1) {
-            SkDebugf("Failed to calibrate loops for %s (Easteregg)\n",
-                     benchmark.name.c_str());
+            SkDebugf("Failed to calibrate loops for %s (Easteregg)\n", benchmark.name.c_str());
             continue;
         }
         std::vector<double> easteregg_samples;
         for (int i = 0; i < FLAGS_samples; i++) {
-            double duration = time(easteregg_loops, benchmark.picture, true, i);
+            double duration = time(easteregg_loops, benchmark.picture);
             easteregg_samples.push_back(duration / easteregg_loops);
         }
-        easteregg_stats.push_back(Stats(easteregg_samples));
-        std::cout << "Easteregg Geomean " << easteregg_stats.back().geomeanSample << "ns"
+        BenchResult result{benchmark.name,
+                           benchmark.path,
+                           benchmark.bounds,
+                           Stats(std::move(easteregg_samples))};
+        std::cout << result.name.c_str() << ": " << result.stats.geomeanSample << "ns"
                   << std::endl;
+        results.push_back(std::move(result));
+    }
+
+    if (!FLAGS_stats.isEmpty()) {
+        SkFILEWStream stream(FLAGS_stats[0]);
+        if (!stream.isValid()) {
+            SkDebugf("Failed to open stats file %s\n", FLAGS_stats[0]);
+            return 1;
+        }
+
+        SkJSONWriter writer(&stream, SkJSONWriter::Mode::kPretty);
+        writer.beginObject();
+        writer.appendDoubleDigits("timer_overhead_ns", timerOverhead, 16);
+        writer.beginArray("results");
+        for (const auto& result : results) {
+            writer.beginObject();
+            writer.appendString("name", result.name);
+            writer.appendString("path", result.path);
+            writer.beginObject("bounds");
+            writer.appendDoubleDigits("width", result.bounds.width(), 16);
+            writer.appendDoubleDigits("height", result.bounds.height(), 16);
+            writer.endObject();
+            writer.beginArray("samples_ns");
+            for (double sample : result.stats.samples) {
+                writer.appendDoubleDigits(sample, 16);
+            }
+            writer.endArray();
+            writer.beginObject("stats_ns");
+            writer.appendDoubleDigits("min", result.stats.minSample, 16);
+            writer.appendDoubleDigits("max", result.stats.maxSample, 16);
+            writer.appendDoubleDigits("mean", result.stats.meanSample, 16);
+            writer.appendDoubleDigits("geomean", result.stats.geomeanSample, 16);
+            writer.endObject();
+            writer.endObject();
+        }
+        writer.endArray();
+        writer.endObject();
     }
 }
-
-// const std::string outputPath = FLAGS_output[0];
-
-// sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
-// if (!picture) {
-//     SkDebugf("Error loading skp from %s", FLAGS_input[0]);
-//     return 1;
-// }
-
-// SkRect bounds(picture->cullRect());
-
-// const double timerOverhead = estimate_timer_overhead_ns();
-// SkDebugf("Timer overhead: %.2f ns\n", timerOverhead);
-
-// std::function<void(SkRecord*)> recordOptimizer = [](SkRecord* record) {
-//     SkRecordOptimize(record);
-// };
-// int loops = calculate_loops(timerOverhead, picture, recordOptimizer);
-
-// std::vector<double> easter_egg;
-// std::vector<double> skrecordopt;
-// std::vector<double> samples;
-
-// for (int i = 0; i < FLAGS_samples; i++) {
-//     double duration = time(loops, picture, RemoveOpaqueSaveLayers(), true, i);
-//     samples.push_back(duration / loops);
-// }
-
-// for (auto sample : samples) {
-//     std::cout << sample << "ns" << std::endl;
-// }
-
-// SkFILEWStream opttime_json((std::string(FLAGS_output[0]) + "/" + "opttime.json").c_str());
-// NanoJSONResultsWriter log(&opttime_json, SkJSONWriter::Mode::kPretty);
-// return 0;

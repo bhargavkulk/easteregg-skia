@@ -35,7 +35,7 @@ if [ ! -d "out/Debug" ]; then
 fi
 
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
-ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds
+ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds optbench
 
 rm -rf "$REPORT_DIR"
 mkdir -p "$REPORT_DIR"
@@ -72,6 +72,8 @@ pip install -r requirements.txt
 cp -r old_jsons report/jsons
 cp old_benchmarks.json report/
 
+./out/Debug/optbench --skps old_bench/*.skp --stats "$REPORT_DIR/optbench.json"
+
 start_xorg
 
 python scripts/run_all_skps.py \
@@ -89,4 +91,5 @@ python scripts/run_all_skps.py \
 python scripts/report_gen.py \
        --nanobench-dir "$REPORT_DIR/nanobench" \
        --json-dir old_jsons \
+       --optbench-stats "$REPORT_DIR/optbench.json" \
        --output "$REPORT_DIR/index.html"

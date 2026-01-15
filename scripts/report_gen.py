@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     parser.add_argument('--output', type=Path, default=Path('report/index.html'))
+    parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     return parser.parse_args()
 
@@ -139,7 +140,21 @@ def main() -> None:
         )
         return p_value
 
-    s: list[tuple[str, float, float, Optional[float], Optional[str], int, float]] = []
+    optbench_by_stem: dict[str, float] = {}
+    optbench_timer_overhead_ns: float | None = None
+    if args.optbench_stats.is_file():
+        with args.optbench_stats.open(encoding='utf-8') as f:
+            optbench_data = json.load(f)
+        optbench_timer_overhead_ns = optbench_data.get('timer_overhead_ns')
+        for entry in optbench_data.get('results', []):
+            name = entry.get('name')
+            stats = entry.get('stats_ns', {})
+            geomean_ns = stats.get('geomean')
+            if isinstance(name, str) and isinstance(geomean_ns, (int, float)):
+                stem = Path(name).stem
+                optbench_by_stem[stem] = float(geomean_ns) / 1_000_000.0
+
+    s: list[tuple[str, float, float, Optional[float], Optional[str], int, float, float | None]] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -182,12 +197,19 @@ def main() -> None:
 
         p = pval(eesamples, blsamples)
 
-        s.append((base_name, eemean, blmean, diff_metric, diff_href, length, p))
+        s.append((base_name,
+                  eemean,
+                  blmean,
+                  diff_metric,
+                  diff_href,
+                  length,
+                  p,
+                  optbench_by_stem.get(base_name)))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>easteregg</th><th>baseline</th><th>diff</th><th>speedup</th><th>p</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>easteregg</th><th>baseline</th><th>optbench (ms)</th><th>diff</th><th>speedup</th><th>p</th></tr>'
     ]
-    for name, eemean, blmean, diff_metric, diff_href, cmds_len, p in s:
+    for name, eemean, blmean, diff_metric, diff_href, cmds_len, p, optbench_ms in s:
         speedup = blmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -195,6 +217,10 @@ def main() -> None:
             diff_display = f'<a href="{html.escape(diff_href)}">view</a>'
         else:
             diff_display = '&mdash;'
+        if optbench_ms is None:
+            optbench_display = '&mdash;'
+        else:
+            optbench_display = f'<code>{optbench_ms:.3f}</code>'
 
         table_rows.append(
             '<tr>'
@@ -202,6 +228,7 @@ def main() -> None:
             f'<td style="text-align:end"><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
             f'<td style="text-align:end"><code>{eemean:.3f}</code></td>'
             f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
+            f'<td style="text-align:end">{optbench_display}</td>'
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             f'<td style="text-align:end"><code>{p:.4g}</code></td>'
@@ -213,7 +240,13 @@ def main() -> None:
     )
 
     # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
-    ratios = np.asarray([blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float)
+    ratios = np.asarray(
+        [blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float
+    )
+    if isinstance(optbench_timer_overhead_ns, (int, float)):
+        overhead_display = f'{optbench_timer_overhead_ns:.2f}'
+    else:
+        overhead_display = 'n/a'
     cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios)
     cdf_svg_href = None
     if cdf_svg_text:
@@ -281,6 +314,7 @@ table tr:hover {{
 <body>
 <h1>{html.escape(args.title)}</h1>
 <p><em>All time units are in ms</em></p>
+<p><em>Optbench timer overhead: {html.escape(overhead_display)} ns</em></p>
 <table class="table-sort table-arrows remember-sort">
 {body_content}
 </table>
