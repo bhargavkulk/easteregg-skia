@@ -68,6 +68,7 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
 
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
+        from matplotlib.ticker import PercentFormatter
     except ImportError:
         return '<p>matplotlib is not available; cannot render the CDF plot.</p>', None
 
@@ -90,9 +91,10 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--')
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(0.0, 1.0)
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
     ax.grid(True, which='both', color='#eee')
     ax.set_xlabel('Baseline / Optimized')
-    ax.set_ylabel('Fraction of benchmarks ≤ x')
+    ax.set_ylabel('Percent of benchmarks ≤ x')
     ax.set_title(f'Empirical CDF of speed ratios (n={n})', loc='left', fontsize=10)
 
     fig.tight_layout()

@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cmath>
-#include <functional>
 #include <iostream>
 #include <numeric>
 #include <utility>
@@ -121,14 +120,12 @@ void writeSkRecord(const SkRecord& records, const SkRect& bounds, std::string fi
     return;
 }
 
-template <typename Transform>
 double time(int loops,
             const sk_sp<SkPicture>& picture,
-            Transform&& transform,
             bool write_to_file = false,
             int sample_index = 0) {
     SkRect bounds(picture->cullRect());
-    std::vector<SkRecord> records(loops + 1);
+    std::vector<SkRecord> records(loops);
 
     // Make all the canvases
     for (auto& record : records) {
@@ -136,25 +133,28 @@ double time(int loops,
         picture->playback(&recorder);
     }
 
+    RemoveOpaqueSaveLayers opt1;
+    RemoveLoneLuma opt2;
+    GradientDstInToMasks opt3;
+
     // Optimize
     auto start = SkTime::GetNSecs();
     for (int i = 0; i < loops; i++) {
-        transform(&records[i]);
+        opt3.transform(&records[i]);
+        opt2.transform(&records[i]);
+        opt1.transform(&records[i]);
     }
     double duration = SkTime::GetNSecs() - start;
 
-    transform(&records.back());
-
     if (write_to_file)
-        writeSkRecord(records.back(),
+        writeSkRecord(records[0],
                       bounds,
                       std::string(FLAGS_output[0]) + "/" + std::to_string(sample_index) + ".skp");
 
     return duration;
 }
 
-template <typename Transform>
-int calculate_loops(const double overhead, const sk_sp<SkPicture>& picture, Transform&& transform) {
+int calculate_loops(const double overhead, const sk_sp<SkPicture>& picture) {
     double bench_plus_overhead = 0.0;
     int round = 0;
 
@@ -163,7 +163,7 @@ int calculate_loops(const double overhead, const sk_sp<SkPicture>& picture, Tran
             SkDebugf("bench + overhead < overhead \n");
             return -2;
         }
-        bench_plus_overhead = time(1, picture, transform);
+        bench_plus_overhead = time(1, picture);
     }
 
     // Later we'll just start and stop the timer once but loop N times.
@@ -220,22 +220,15 @@ int main(int argc, char** argv) {
     }
 
     for (const auto& benchmark : benchmarks) {
-        RemoveOpaqueSaveLayers opt;
-        RemoveLoneLuma opt2;
-        // std::function<void(SkRecord*)> opt = [opt1, opt2](SkRecord* record) {
-        //     opt1.transform(record);
-        //     opt2.transform(record);
-        // };
-
-        int easteregg_loops = calculate_loops(timerOverhead, benchmark.picture, opt);
+        int easteregg_loops = calculate_loops(timerOverhead, benchmark.picture);
         if (easteregg_loops < 1) {
-            SkDebugf("Failed to calibrate loops for %s (RemoveOpaqueSaveLayers)\n",
+            SkDebugf("Failed to calibrate loops for %s (Easteregg)\n",
                      benchmark.name.c_str());
             continue;
         }
         std::vector<double> easteregg_samples;
         for (int i = 0; i < FLAGS_samples; i++) {
-            double duration = time(easteregg_loops, benchmark.picture, opt, true, i);
+            double duration = time(easteregg_loops, benchmark.picture, true, i);
             easteregg_samples.push_back(duration / easteregg_loops);
         }
         easteregg_stats.push_back(Stats(easteregg_samples));

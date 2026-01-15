@@ -3759,8 +3759,8 @@ test_app("print_bounds") {
   ]
 }
 
-test_app("optimizebench") {
-  sources = [ "easteregg/optimize_bench.cpp" ]
+test_app("optbench") {
+  sources = [ "easteregg/optbench.cpp" ]
   deps = [
     ":easteregg",
     ":flags",
