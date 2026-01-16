@@ -30,9 +30,7 @@ start_xorg() {
 
 trap stop_xorg EXIT
 
-if [ ! -d "out/Debug" ]; then
-    python3 tools/git-sync-deps
-fi
+python3 tools/git-sync-deps
 
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-fno-omit-frame-pointer","-flto=thin"] extra_ldflags=["-flto=thin"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds optbench
