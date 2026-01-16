@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--output', type=Path, default=Path('report/index.html'))
     parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
+    parser.add_argument('--backend', type=str, default='gl')
     return parser.parse_args()
 
 
@@ -125,7 +126,7 @@ def main() -> None:
         with bench_file.open(encoding='utf-8') as f:
             timing_data = json.load(f)
 
-        gl_data = timing_data['results'][benchmark_name]['gl']
+        gl_data = timing_data['results'][benchmark_name][args.backend]
         samples: list[float] = gl_data['samples']
 
         return np.asarray(samples, dtype=float)
@@ -136,7 +137,7 @@ def main() -> None:
     def pval(your_times, baseline_times):
         your = np.asarray(your_times, dtype=float)
         base = np.asarray(baseline_times, dtype=float)
-        t_stat, p_value = sp.ttest_rel(
+        t_stat, p_value = sp.ttest_ind(
             np.log(base), np.log(your), alternative='two-sided', nan_policy='raise'
         )
         return p_value
@@ -155,7 +156,9 @@ def main() -> None:
                 stem = Path(name).stem
                 optbench_by_stem[stem] = float(geomean_ns) / 1_000_000.0
 
-    s: list[tuple[str, float, float, Optional[float], Optional[str], int, float, float | None]] = []
+    s: list[
+        tuple[str, float, float, Optional[float], Optional[float], Optional[str], int, float]
+    ] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
         with json_path.open(encoding='utf-8') as f:
@@ -198,23 +201,13 @@ def main() -> None:
 
         p = pval(eesamples, blsamples)
 
-        s.append(
-            (
-                base_name,
-                eemean,
-                blmean,
-                diff_metric,
-                diff_href,
-                length,
-                p,
-                optbench_by_stem.get(base_name),
-            )
-        )
+        opt_geomean = optbench_by_stem.get(base_name)
+        s.append((base_name, eemean, blmean, opt_geomean, diff_metric, diff_href, length, p))
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>easteregg</th><th>baseline</th><th>optbench (ms)</th><th>diff</th><th>speedup</th><th>p</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>Easteregg</th><th>Baseline</th><th>OptTime</th><th>Diff</th><th>Speedup</th><th>p</th></tr>'
     ]
-    for name, eemean, blmean, diff_metric, diff_href, cmds_len, p, optbench_ms in s:
+    for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p in s:
         speedup = blmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -222,10 +215,11 @@ def main() -> None:
             diff_display = f'<a href="{html.escape(diff_href)}">view</a>'
         else:
             diff_display = '&mdash;'
-        if optbench_ms is None:
-            optbench_display = '&mdash;'
+
+        if isinstance(opt_geomean, (int, float)):
+            opt_geomean_display = f'<code>{opt_geomean:.3f}</code>'
         else:
-            optbench_display = f'<code>{optbench_ms:.3f}</code>'
+            opt_geomean_display = '&mdash;'
 
         table_rows.append(
             '<tr>'
@@ -233,7 +227,7 @@ def main() -> None:
             f'<td style="text-align:end"><a href=./jsons/{name}.json><code>{cmds_len}</code></a></td>'
             f'<td style="text-align:end"><code>{eemean:.3f}</code></td>'
             f'<td style="text-align:end"><code>{blmean:.3f}</code></td>'
-            f'<td style="text-align:end">{optbench_display}</td>'
+            f'<td style="text-align:end">{opt_geomean_display}</td>'
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             f'<td style="text-align:end"><code>{p:.4g}</code></td>'

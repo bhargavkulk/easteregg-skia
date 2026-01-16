@@ -34,45 +34,22 @@ if [ ! -d "out/Debug" ]; then
     python3 tools/git-sync-deps
 fi
 
-./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags_cc=["-frtti", "-pg"]'
+./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-fno-omit-frame-pointer","-flto=thin"] extra_ldflags=["-flto=thin"]'
 ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds optbench
-
-rm -rf "$REPORT_DIR"
-mkdir -p "$REPORT_DIR"
-
-# if [ ! -d "skps" ]; then
-#     $(pwd)/.venv/bin/python -m pip install uv
-#     $(pwd)/.venv/bin/python -m uv sync --no-dev
-#     $(pwd)/.venv/bin/python -m playwright install
-#     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
-#     $(pwd)/.venv/bin/python scripts/skp_to_json.py skps/ jsons/ ./out/Debug/skp_parser
-#     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
-# fi
 
 rm -rf opt report
 mkdir opt
 mkdir report
 
-# $(pwd)/.venv/bin/python -m pip install uv
-# $(pwd)/.venv/bin/python -m uv sync --no-dev
-#     # $(pwd)/.venv/bin/python -m playwright install
-# #     $(pwd)/.venv/bin/python scripts/download_skps.py urls.toml skps/
-# $(pwd)/.venv/bin/python scripts/skp_to_json.py old_bench/ old_jsons/ ./out/Debug/skp_parser
-# #     $(pwd)/.venv/bin/python scripts/benchmark_gen.py skps/ jsons/ benchmarks.json ./out/Debug/print_bounds
-
 python3 -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
-# python scripts/benchmark_gen.py old_bench/ \
-#        old_jsons/ \
-#        old_benchmarks.json \
-#        ./out/Debug/print_bounds
 
 cp -r old_jsons report/jsons
 cp old_benchmarks.json report/
 
-./out/Debug/optbench --skps old_bench/*.skp --stats "$REPORT_DIR/optbench.json"
+./out/Debug/optbench --skps old_bench/*.skp --stats "report/optbench.json"
 
 start_xorg
 
@@ -81,15 +58,15 @@ python scripts/run_all_skps.py \
        --optimizer out/Debug/optimizer \
        --nanobench out/Debug/nanobench \
        --opt-dir opt \
-       --report-dir "$REPORT_DIR" \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
+       --report-dir "report" \
+       --nanobench-dir "report/nanobench" \
        --json-dir old_jsons/ \
        --samples 100 \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
 
 python scripts/report_gen.py \
-       --nanobench-dir "$REPORT_DIR/nanobench" \
+       --nanobench-dir "report/nanobench" \
        --json-dir old_jsons \
-       --optbench-stats "$REPORT_DIR/optbench.json" \
-       --output "$REPORT_DIR/index.html"
+       --optbench-stats "report/optbench.json" \
+       --output "report/index.html"

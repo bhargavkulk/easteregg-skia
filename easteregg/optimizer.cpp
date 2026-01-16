@@ -27,17 +27,6 @@ static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, "optimized.skp", "Output .skp file");
 static DEFINE_string(transform, "easteregg", "Transform to run: easteregg, skrecordopt, or none");
 
-struct RecordPrinter {
-    std::ostringstream os;
-    int index = 0;
-
-    template <typename T> void operator()(const T& op) {
-        os << "    [" << index++ << "] " << typeid(T).name() << "<br />\n";
-    }
-
-    std::string str() { return os.str(); }
-};
-
 sk_sp<SkPicture> PictureFromRecord(const SkRecord& records, const SkRect& bounds) {
     SkPictureRecorder recorder;
     SkCanvas* canvas = recorder.beginRecording(bounds);
@@ -90,35 +79,17 @@ int main(int argc, char** argv) {
 
     const std::string transform = FLAGS_transform[0];
 
-    if (transform == "easteregg") {
-        RemoveOpaqueSaveLayers opt1;
-        RemoveLoneLuma opt2;
-        GradientDstInToMasks opt3;
+    RemoveOpaqueSaveLayers opt1;
+    RemoveLoneLuma opt2;
+    GradientDstInToMasks opt3;
 
-        opt3.transform(&records);
-        opt2.transform(&records);
-        opt1.transform(&records);
+    opt3.transform(&records);
+    opt2.transform(&records);
+    opt1.transform(&records);
 
-        auto optimizedPicture = PictureFromRecord(records, bounds);
-        if (!writePictureToSkp(optimizedPicture, outputPath)) {
-            ERROR("Failed to write %s", outputPath.c_str());
-            return 1;
-        }
-    } else if (transform == "skrecordopt") {
-        SkRecordOptimize(&records);
-
-        auto optimizedPicture = PictureFromRecord(records, bounds);
-        if (!writePictureToSkp(optimizedPicture, outputPath)) {
-            ERROR("Failed to write %s", outputPath.c_str());
-            return 1;
-        }
-    } else if (transform == "none") {
-        if (!writePictureToSkp(picture, outputPath)) {
-            ERROR("Failed to write %s", outputPath.c_str());
-            return 1;
-        }
-    } else {
-        ERROR("Unknown transform '%s'", transform.c_str());
+    auto optimizedPicture = PictureFromRecord(records, bounds);
+    if (!writePictureToSkp(optimizedPicture, outputPath)) {
+        ERROR("Failed to write %s", outputPath.c_str());
         return 1;
     }
 

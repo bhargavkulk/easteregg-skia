@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--samples', type=int, default=100)
     parser.add_argument('--renderer', type=Path, default=Path('out/Debug/renderer'))
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
+    parser.add_argument('--backend', type=str, default='gl')
     return parser.parse_args()
 
 
@@ -42,16 +43,19 @@ def run_cmd(cmd: list[str]) -> None:
         raise RuntimeError(f'Command failed ({result.returncode}): {" ".join(cmd)}\n{stderr}')
 
 
-def run_optimizer(binary: Path, skp: Path, output: Path, transform: str | None = None) -> None:
+def run_optimizer(binary: Path, skp: Path, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     cmd = [str(binary), '--input', str(skp), '--output', str(output)]
-    if transform:
-        cmd.extend(['--transform', transform])
     run_cmd(cmd)
 
 
 def run_nanobench(
-    binary: Path, skp_paths: list[Path], results_path: Path, clip: Optional[str], samples: int
+    binary: Path,
+    skp_paths: list[Path],
+    results_path: Path,
+    clip: Optional[str],
+    samples: int,
+    backend: str,
 ) -> None:
     results_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -65,7 +69,7 @@ def run_nanobench(
         '--skps',
         *map(str, skp_paths),
         '--config',
-        'gl',
+        backend,
     ]
     if clip:
         cmd.extend(['--clip', clip])
@@ -120,6 +124,7 @@ def main():
     for skp in skp_paths:
         stem = skp.stem
         clip, should_run = read_metadata(args.json_dir, stem)
+        print(clip)
 
         if not should_run:
             continue
@@ -130,7 +135,9 @@ def main():
         run_optimizer(args.optimizer, skp, ee_output)
 
         results_file = args.nanobench_dir / f'{stem}__nanobench.json'
-        run_nanobench(args.nanobench, [skp, ee_output], results_file, clip, args.samples)
+        run_nanobench(
+            args.nanobench, [skp, ee_output], results_file, clip, args.samples, args.backend
+        )
 
         ee_png: Path = args.png_dir / f'{stem}__ee.png'
         bl_png: Path = args.png_dir / f'{stem}.png'
