@@ -45,7 +45,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 cp -r old_jsons report/jsons
-cp old_benchmarks.json report/
 
 ./out/Debug/optbench --skps old_bench/*.skp --stats "report/optbench.json"
 
