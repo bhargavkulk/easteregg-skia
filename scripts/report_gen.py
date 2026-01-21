@@ -5,7 +5,6 @@ import io
 import json
 import re
 import subprocess
-import tempfile
 import sys
 from pathlib import Path
 from typing import Optional
@@ -126,14 +125,8 @@ def run_optimizer_stdout(binary: Path, skp: Path) -> Optional[int]:
     if not binary.is_file() or not skp.is_file():
         return None
 
-    with tempfile.NamedTemporaryFile(suffix='.skp', delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
-    cmd = [str(binary), '--input', str(skp), '--output', str(tmp_path)]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    cmd = [str(binary), '--input', str(skp)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
         stderr = result.stderr.strip()

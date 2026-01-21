@@ -95,11 +95,13 @@ int main(int argc, char** argv) {
     printf("%d\n", totalMatches);
 #endif
 
+#ifndef EASTEREGG_PRINT_MATCHES
     auto optimizedPicture = PictureFromRecord(records, bounds);
     if (!writePictureToSkp(optimizedPicture, outputPath)) {
         ERROR("Failed to write %s", outputPath.c_str());
         return 1;
     }
+#endif
 
     return 0;
 }
