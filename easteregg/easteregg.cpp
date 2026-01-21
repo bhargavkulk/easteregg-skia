@@ -289,3 +289,238 @@ void RemoveLoneLuma::transform(SkRecord* records) const {
         }
     }
 }
+
+// TODO need to check if clip after MatchDstin is always id
+void DstInToClip::transform(SkRecord* records) const {
+    int saveCount = 0;
+    for (int i = 0; i < records->count(); i++) {
+        if (IS_RECORD(isSaveLayer)) {
+            SkPaint* paint = isSaveLayer.get()->paint;
+
+            // if this is the first save layer:
+            //     push MatchOuter
+            // if this is not the first save layer:
+            //     if the current top state is MatchSave:
+            //         bail: make the current top Ignore
+            //         push MatchOuter
+            //     else if the current top state is MatchBottom:
+            //         if the save layer is a plain dstin one:
+            //             push MatchDstIn
+            //         else:
+            //             bail: make the current top Ignore
+            //             push MatchOuter
+            //     else if the current top state is MatchDstIn or MatchDraw:
+            //         bail: make the current top Ignore
+            //             and also make the state beneath Ignore
+            //         push MatchOuter
+            //     else if the current top state is Matched:
+            //         bail: make the current top Ignore
+            //         push MatchOuter
+            //     else:
+            //         bail: make the current top Ignore
+            //         push MatchOuter
+            if (state_stack.empty()) {
+                state_stack.push_back({
+                        MatchState::MatchOuter,
+                        i,
+                        -1,
+                        -1,
+                        -1,
+                        saveCount,
+                        {},
+                });
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::MatchSave) {
+                state_stack.back().state = MatchState::Ignore;
+                state_stack.push_back({
+                        MatchState::MatchOuter,
+                        i,
+                        -1,
+                        -1,
+                        -1,
+                        saveCount,
+                        {},
+                });
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::MatchBottom) {
+                if (isPaintDstInMask(paint)) {
+                    const int outerIndex = state_stack.back().outerIndex;
+                    state_stack.push_back({
+                            MatchState::MatchDstIn,
+                            outerIndex,
+                            i,
+                            -1,
+                            -1,
+                            saveCount,
+                            {},
+                    });
+                } else {
+                    state_stack.back().state = MatchState::Ignore;
+                    state_stack.push_back({
+                            MatchState::MatchOuter,
+                            i,
+                            -1,
+                            -1,
+                            -1,
+                            saveCount,
+                            {},
+                    });
+                }
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::MatchDstIn ||
+                state_stack.back().state == MatchState::MatchDraw) {
+                state_stack.back().state = MatchState::Ignore;
+                SkASSERTF(state_stack.size() >= 2, "DstInToClip: expected outer state");
+                state_stack[state_stack.size() - 2].state = MatchState::Ignore;
+                state_stack.push_back({
+                        MatchState::MatchOuter,
+                        i,
+                        -1,
+                        -1,
+                        -1,
+                        saveCount,
+                        {},
+                });
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::Matched) {
+                state_stack.back().state = MatchState::Ignore;
+                state_stack.push_back({
+                        MatchState::MatchOuter,
+                        i,
+                        -1,
+                        -1,
+                        -1,
+                        saveCount,
+                        {},
+                });
+                continue;
+            }
+
+            state_stack.back().state = MatchState::Ignore;
+            state_stack.push_back({
+                    MatchState::MatchOuter,
+                    i,
+                    -1,
+                    -1,
+                    -1,
+                    saveCount,
+                    {},
+            });
+
+        } else if (IS_RECORD(isSave)) {
+            saveCount += 1;
+            // if the current state is MatchOuter:
+            //    change the state to MatchSave
+            if (!state_stack.empty() && state_stack.back().state == MatchState::MatchOuter) {
+                state_stack.back().state = MatchState::MatchSave;
+            }
+        } else if (IS_RECORD(isRestore)) {
+            // take care of the save restore pairs first
+            if (state_stack.empty() || state_stack.back().saveCount < saveCount) {
+                SkASSERTF(saveCount > 0, "unbalanced restore at command %d", i);
+                saveCount -= 1;
+                // If current state is MatchSave
+                //    change it to MatchBottom
+                if (!state_stack.empty() && state_stack.back().state == MatchState::MatchSave) {
+                    state_stack.back().state = MatchState::MatchBottom;
+                }
+                continue;
+            }
+
+            // now we check if we matched the inner dstin mask
+            if (state_stack.back().state == MatchState::MatchDraw) {
+                // we pop the current state
+                // then we change the new current state to Matched
+                const MatchState innerState = state_stack.back();
+                state_stack.pop_back();
+                if (!state_stack.empty()) {
+                    state_stack.back().state = MatchState::Matched;
+                    state_stack.back().innerIndex = innerState.innerIndex;
+                    state_stack.back().innerRestoreIndex = i;
+                    state_stack.back().lastDrawIndex = innerState.lastDrawIndex;
+                    state_stack.back().clipIndices = innerState.clipIndices;
+                }
+                continue;
+            }
+            // now we check if we matched the entire pattern
+            else if (state_stack.back().state == MatchState::Matched) {
+                const int insertAt = state_stack.back().outerIndex + 1;
+
+                for (int clipIndex : state_stack.back().clipIndices) {
+                    SkRecords::Is<SkRecords::ClipRect> clipRect;
+                    const bool hasClip = records->mutate(clipIndex, clipRect);
+                    if (!hasClip) {
+                        continue;
+                    }
+                    const SkRecords::ClipRect* src = clipRect.get();
+                    SkRecords::ClipRect* dst = records->insert<SkRecords::ClipRect>(insertAt);
+                    new (dst) SkRecords::ClipRect{src->rect, src->opAA};
+                }
+
+                SkRecords::Is<SkRecords::DrawPath> drawPath;
+                const bool hasDraw = records->mutate(state_stack.back().lastDrawIndex, drawPath);
+                if (hasDraw) {
+                    const SkRecords::DrawPath* src = drawPath.get();
+                    SkRecords::ClipPath* dst = records->insert<SkRecords::ClipPath>(insertAt);
+                    new (dst) SkRecords::ClipPath{
+                            src->path,
+                            SkRecords::ClipOpAndAA(SkClipOp::kIntersect, true),
+                    };
+                }
+
+                for (int j = state_stack.back().innerIndex;
+                     j <= state_stack.back().innerRestoreIndex;
+                     j++) {
+                    records->replace<SkRecords::NoOp>(j);
+                }
+            }
+
+            state_stack.pop_back();
+        } else if (IS_RECORD(isDraw)) {
+            // if the current state is MatchDstIn:
+            //    change the state to MatchDraw
+            // else if the current state is MatchDraw:
+            //    bail: Ignore the current state and the one below it
+            // else if the current state is Matched:
+            //    bail: Ignore the current state
+            if (state_stack.empty()) {
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::MatchDstIn) {
+                if (IS_RECORD(isDrawPath) && isPaintPlain(isDraw.get(), true)) {
+                    state_stack.back().state = MatchState::MatchDraw;
+                    state_stack.back().lastDrawIndex = i;
+                } else {
+                    state_stack.back().state = MatchState::Ignore;
+                    SkASSERTF(state_stack.size() >= 2, "DstInToClip: expected outer state");
+                    state_stack[state_stack.size() - 2].state = MatchState::Ignore;
+                }
+            } else if (state_stack.back().state == MatchState::MatchDraw) {
+                state_stack.back().state = MatchState::Ignore;
+                SkASSERTF(state_stack.size() >= 2, "DstInToClip: expected outer state");
+                state_stack[state_stack.size() - 2].state = MatchState::Ignore;
+            } else if (state_stack.back().state == MatchState::Matched) {
+                state_stack.back().state = MatchState::Ignore;
+            }
+        } else if (IS_RECORD(isClipRect)) {
+            if (state_stack.empty()) {
+                continue;
+            }
+            if (state_stack.back().state == MatchState::MatchDstIn ||
+                state_stack.back().state == MatchState::MatchDraw) {
+                state_stack.back().clipIndices.push_back(i);
+            }
+        }
+    }
+
+    records->executeInsertions();
+}

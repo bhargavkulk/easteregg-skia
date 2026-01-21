@@ -116,4 +116,37 @@ private:
     mutable SkRecords::IsSingleDraw isDraw;
 };
 
+struct DstInToClip {
+    void transform(SkRecord* records) const;
+    void operator()(SkRecord* records) const { transform(records); }
+
+private:
+    struct MatchState {
+        enum {
+            Ignore,
+            MatchOuter,
+            MatchSave,
+            MatchDstIn,
+            MatchDraw,
+            Matched,
+            MatchBottom,
+        } state;
+        int outerIndex;
+        int innerIndex;
+        int innerRestoreIndex;
+        int lastDrawIndex;
+        int saveCount;
+        skia_private::STArray<8, int> clipIndices;
+    };
+
+    mutable skia_private::STArray<8, MatchState> state_stack;
+
+    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    mutable SkRecords::Is<SkRecords::Save> isSave;
+    mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::Is<SkRecords::ClipRect> isClipRect;
+    mutable SkRecords::Is<SkRecords::DrawPath> isDrawPath;
+    mutable SkRecords::IsSingleDraw isDraw;
+};
+
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_

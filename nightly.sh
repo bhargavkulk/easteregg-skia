@@ -32,8 +32,8 @@ trap stop_xorg EXIT
 
 python3 tools/git-sync-deps
 
-./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-fno-omit-frame-pointer","-flto=thin"] extra_ldflags=["-flto=thin"]'
-ninja -C out/Debug optimizer nanobench renderer skp_parser print_bounds optbench
+./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
+ninja -C out/Debug optimizer nanobench renderer skp_parser
 
 rm -rf opt report
 mkdir opt

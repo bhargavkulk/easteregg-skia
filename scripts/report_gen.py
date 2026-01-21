@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     parser.add_argument('--output', type=Path, default=Path('report/index.html'))
+    parser.add_argument('--table-json', type=Path, default=None)
     parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
@@ -238,6 +239,43 @@ def main() -> None:
         '\n'.join(table_rows) if s else '<p>No benchmarks with save layers were found.</p>'
     )
 
+    table_json = None
+    if args.table_json is not None:
+        columns = [
+            {'key': 'benchmark', 'label': 'Benchmark'},
+            {'key': 'cmds', 'label': '#cmds'},
+            {'key': 'easteregg_ms', 'label': 'Easteregg'},
+            {'key': 'baseline_ms', 'label': 'Baseline'},
+            {'key': 'opt_time_ms', 'label': 'OptTime'},
+            {'key': 'diff_metric', 'label': 'Diff'},
+            {'key': 'speedup', 'label': 'Speedup'},
+            {'key': 'p_value', 'label': 'p'},
+        ]
+        rows = []
+        for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p in s:
+            rows.append(
+                {
+                    'benchmark': format_name(name),
+                    'benchmark_id': name,
+                    'commands_json': f'./jsons/{name}.json',
+                    'cmds': cmds_len,
+                    'easteregg_ms': eemean,
+                    'baseline_ms': blmean,
+                    'opt_time_ms': opt_geomean,
+                    'diff_metric': diff_metric,
+                    'diff_href': diff_href,
+                    'speedup': blmean / eemean,
+                    'p_value': p,
+                }
+            )
+        table_json = {
+            'title': args.title,
+            'backend': args.backend,
+            'units': {'time': 'ms', 'speedup': 'ratio', 'p_value': 'unitless'},
+            'columns': columns,
+            'rows': rows,
+        }
+
     # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
     ratios = np.asarray([blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float)
     if isinstance(optbench_timer_overhead_ns, (int, float)):
@@ -324,6 +362,9 @@ table tr:hover {{
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(html_output, encoding='utf-8')
+    if table_json is not None and args.table_json is not None:
+        args.table_json.parent.mkdir(parents=True, exist_ok=True)
+        args.table_json.write_text(json.dumps(table_json, indent=2), encoding='utf-8')
 
 
 if __name__ == '__main__':

@@ -82,9 +82,11 @@ int main(int argc, char** argv) {
     RemoveOpaqueSaveLayers opt1;
     RemoveLoneLuma opt2;
     GradientDstInToMasks opt3;
+    DstInToClip opt4;
 
     opt3.transform(&records);
     opt2.transform(&records);
+    opt4.transform(&records);
     opt1.transform(&records);
 
     auto optimizedPicture = PictureFromRecord(records, bounds);
