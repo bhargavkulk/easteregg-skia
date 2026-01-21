@@ -119,6 +119,7 @@ bool isPaintOpaqueLinearOrRadialGradient(SkPaint* paint) {
 void RemoveOpaqueSaveLayers::operator()(SkRecord* records) { transform(records); }
 
 void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
+    match_count = 0;
     for (int i = 0; i < records->count(); i++) {
         if (records->mutate(i, isSaveLayer)) {
             if (!state_stack.empty()) state_stack.back() = MatchState::Ignore;
@@ -146,6 +147,7 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
 
             if (state == MatchState::Matching) {
                 records->replace<SkRecords::Save>(index);
+                match_count += 1;
             }
         }
     }
@@ -153,6 +155,7 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
 
 void GradientDstInToMasks::transform(SkRecord* records) const {
     int saveCount = 0;
+    match_count = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
             SkPaint* paint = isSaveLayer.get()->paint;
@@ -199,6 +202,7 @@ void GradientDstInToMasks::transform(SkRecord* records) const {
                 for (int j = state_stack.back().saveLayerIndex; j <= i; j++) {
                     records->replace<SkRecords::NoOp>(j);
                 }
+                match_count += 1;
             }
 
             state_stack.pop_back();
@@ -229,6 +233,7 @@ void GradientDstInToMasks::transform(SkRecord* records) const {
 
 void RemoveLoneLuma::transform(SkRecord* records) const {
     int saveCount = 0;
+    match_count = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
             if (!state_stack.empty()) {
@@ -269,6 +274,7 @@ void RemoveLoneLuma::transform(SkRecord* records) const {
             if (state_stack.back().state == MatchState::MatchDraw) {
                 records->replace<SkRecords::Save>(state_stack.back().index);
                 state_stack.back().paint->setColor4f(SkColors::kBlack);
+                match_count += 1;
             }
 
             state_stack.pop_back();
@@ -293,6 +299,7 @@ void RemoveLoneLuma::transform(SkRecord* records) const {
 // TODO need to check if clip after MatchDstin is always id
 void DstInToClip::transform(SkRecord* records) const {
     int saveCount = 0;
+    match_count = 0;
     for (int i = 0; i < records->count(); i++) {
         if (IS_RECORD(isSaveLayer)) {
             SkPaint* paint = isSaveLayer.get()->paint;
@@ -481,6 +488,7 @@ void DstInToClip::transform(SkRecord* records) const {
                      j++) {
                     records->replace<SkRecords::NoOp>(j);
                 }
+                match_count += 1;
             }
 
             state_stack.pop_back();

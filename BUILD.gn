@@ -3767,3 +3767,13 @@ test_app("optbench") {
     ":skia",
   ]
 }
+
+test_app("optimizer_stdout") {
+  sources = [ "easteregg/optimizer.cpp" ]
+  deps = [
+    ":easteregg",
+    ":flags",
+    ":skia",
+  ]
+  defines = [ "EASTEREGG_PRINT_MATCHES" ]
+}

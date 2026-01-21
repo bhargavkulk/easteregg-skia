@@ -89,6 +89,12 @@ int main(int argc, char** argv) {
     opt4.transform(&records);
     opt1.transform(&records);
 
+#ifdef EASTEREGG_PRINT_MATCHES
+    const int totalMatches =
+            opt1.matchCount() + opt2.matchCount() + opt3.matchCount() + opt4.matchCount();
+    printf("%d\n", totalMatches);
+#endif
+
     auto optimizedPicture = PictureFromRecord(records, bounds);
     if (!writePictureToSkp(optimizedPicture, outputPath)) {
         ERROR("Failed to write %s", outputPath.c_str());

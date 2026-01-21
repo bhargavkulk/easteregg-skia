@@ -33,7 +33,7 @@ trap stop_xorg EXIT
 python3 tools/git-sync-deps
 
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
-ninja -C out/Debug optimizer nanobench renderer skp_parser
+ninja -C out/Debug optimizer nanobench renderer skp_parser optimizer_stdout
 
 rm -rf opt report
 mkdir opt
@@ -66,4 +66,6 @@ python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
        --json-dir old_jsons \
        --optbench-stats "report/optbench.json" \
-       --output "report/index.html"
+       --output "report/index.html" \
+       --skp-dir old_bench/ \
+       --optimizer-stdout out/Debug/optimizer_stdout

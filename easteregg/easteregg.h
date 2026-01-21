@@ -13,6 +13,7 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque = true);
 struct RemoveOpaqueSaveLayers {
     void operator()(SkRecord* records);
     void transform(SkRecord* records) const;
+    int matchCount() const { return match_count; }
 
 private:
     enum class MatchState { Matching, Ignore };
@@ -25,6 +26,7 @@ private:
     mutable SkRecords::IsSingleDraw isDraw;
     mutable skia_private::STArray<8, MatchState> state_stack;
     mutable skia_private::STArray<8, int> index_stack;
+    mutable int match_count = 0;
 };
 
 // * λskia
@@ -49,6 +51,7 @@ private:
 
 struct GradientDstInToMasks {
     void transform(SkRecord* records) const;
+    int matchCount() const { return match_count; }
 
 private:
     struct MatchState {
@@ -70,6 +73,7 @@ private:
     mutable SkRecords::Is<SkRecords::Save> isSave;
     mutable SkRecords::Is<SkRecords::Restore> isRestore;
     mutable SkRecords::IsSingleDraw isDraw;
+    mutable int match_count = 0;
 };
 
 // * λskia
@@ -94,6 +98,7 @@ private:
 struct RemoveLoneLuma {
     void transform(SkRecord* records) const;
     void operator()(SkRecord* records) const { transform(records); }
+    int matchCount() const { return match_count; }
 
 private:
     struct MatchState {
@@ -114,11 +119,13 @@ private:
     mutable SkRecords::Is<SkRecords::Save> isSave;
     mutable SkRecords::Is<SkRecords::Restore> isRestore;
     mutable SkRecords::IsSingleDraw isDraw;
+    mutable int match_count = 0;
 };
 
 struct DstInToClip {
     void transform(SkRecord* records) const;
     void operator()(SkRecord* records) const { transform(records); }
+    int matchCount() const { return match_count; }
 
 private:
     struct MatchState {
@@ -147,6 +154,7 @@ private:
     mutable SkRecords::Is<SkRecords::ClipRect> isClipRect;
     mutable SkRecords::Is<SkRecords::DrawPath> isDrawPath;
     mutable SkRecords::IsSingleDraw isDraw;
+    mutable int match_count = 0;
 };
 
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_

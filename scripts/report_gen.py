@@ -5,6 +5,8 @@ import io
 import json
 import re
 import subprocess
+import tempfile
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +26,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
+    parser.add_argument('--skp-dir', type=Path, default=Path('skps'))
+    parser.add_argument('--optimizer-stdout', type=Path, default=Path('out/Debug/optimizer_stdout'))
     return parser.parse_args()
 
 
@@ -118,6 +122,31 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     return img_html, svg_text
 
 
+def run_optimizer_stdout(binary: Path, skp: Path) -> Optional[int]:
+    if not binary.is_file() or not skp.is_file():
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix='.skp', delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    cmd = [str(binary), '--input', str(skp), '--output', str(tmp_path)]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        print(
+            f'optimizer_stdout failed for {skp} ({result.returncode}): {stderr}',
+            file=sys.stderr,
+        )
+        return None
+
+    match = re.search(r'\d+', result.stdout.strip())
+    return int(match.group(0)) if match else None
+
+
 def main() -> None:
     args = parse_args()
 
@@ -158,7 +187,7 @@ def main() -> None:
                 optbench_by_stem[stem] = float(geomean_ns) / 1_000_000.0
 
     s: list[
-        tuple[str, float, float, Optional[float], Optional[float], Optional[str], int, float]
+        tuple[str, float, float, Optional[float], Optional[float], Optional[str], int, float, Optional[int]]
     ] = []
 
     for json_path in sorted(args.json_dir.glob('*.json')):
@@ -203,12 +232,16 @@ def main() -> None:
         p = pval(eesamples, blsamples)
 
         opt_geomean = optbench_by_stem.get(base_name)
-        s.append((base_name, eemean, blmean, opt_geomean, diff_metric, diff_href, length, p))
+        skp_path = args.skp_dir / f'{base_name}.skp'
+        matches = run_optimizer_stdout(args.optimizer_stdout, skp_path)
+        s.append(
+            (base_name, eemean, blmean, opt_geomean, diff_metric, diff_href, length, p, matches)
+        )
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>Easteregg</th><th>Baseline</th><th>OptTime</th><th>Diff</th><th>Speedup</th><th>p</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>Easteregg</th><th>Baseline</th><th>OptTime</th><th>Diff</th><th>Speedup</th><th>#matches</th><th>p</th></tr>'
     ]
-    for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p in s:
+    for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p, matches in s:
         speedup = blmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -222,6 +255,11 @@ def main() -> None:
         else:
             opt_geomean_display = '&mdash;'
 
+        if isinstance(matches, int):
+            matches_display = f'<code>{matches}</code>'
+        else:
+            matches_display = '&mdash;'
+
         table_rows.append(
             '<tr>'
             f'<td>{html.escape(format_name(name))}</td>'
@@ -231,6 +269,7 @@ def main() -> None:
             f'<td style="text-align:end">{opt_geomean_display}</td>'
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
+            f'<td style="text-align:end">{matches_display}</td>'
             f'<td style="text-align:end"><code>{p:.4g}</code></td>'
             '</tr>'
         )
@@ -249,10 +288,11 @@ def main() -> None:
             {'key': 'opt_time_ms', 'label': 'OptTime'},
             {'key': 'diff_metric', 'label': 'Diff'},
             {'key': 'speedup', 'label': 'Speedup'},
+            {'key': 'matches', 'label': '#matches'},
             {'key': 'p_value', 'label': 'p'},
         ]
         rows = []
-        for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p in s:
+        for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p, matches in s:
             rows.append(
                 {
                     'benchmark': format_name(name),
@@ -265,6 +305,7 @@ def main() -> None:
                     'diff_metric': diff_metric,
                     'diff_href': diff_href,
                     'speedup': blmean / eemean,
+                    'matches': matches,
                     'p_value': p,
                 }
             )
