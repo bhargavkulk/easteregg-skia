@@ -57,7 +57,7 @@ python scripts/run_all_skps.py \
        --opt-dir opt \
        --report-dir "report" \
        --nanobench-dir "report/nanobench" \
-       --json-dirjsons/ \
+       --json-dir jsons/ \
        --samples 100 \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
