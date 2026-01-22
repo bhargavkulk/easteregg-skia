@@ -44,28 +44,28 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-cp -r old_jsons report/jsons
+cp -r jsons report/jsons
 
-./out/Debug/optbench --skps old_bench/*.skp --stats "report/optbench.json"
+./out/Debug/optbench --skps skps/*.skp --stats "report/optbench.json"
 
 start_xorg
 
 python scripts/run_all_skps.py \
-       --skp-dir old_bench/ \
+       --skp-dir skps/ \
        --optimizer out/Debug/optimizer \
        --nanobench out/Debug/nanobench \
        --opt-dir opt \
        --report-dir "report" \
        --nanobench-dir "report/nanobench" \
-       --json-dir old_jsons/ \
+       --json-dirjsons/ \
        --samples 100 \
        --renderer out/Debug/renderer \
        --png-dir report/pngs
 
 python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
-       --json-dir old_jsons \
+       --json-dir jsons \
        --optbench-stats "report/optbench.json" \
        --output "report/index.html" \
-       --skp-dir old_bench/ \
+       --skp-dir skps/ \
        --optimizer-stdout out/Debug/optimizer_stdout
