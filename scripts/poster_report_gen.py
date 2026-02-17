@@ -63,22 +63,6 @@ def format_name(name: str) -> str:
     return name.replace('__', ' | ').replace('_', ' ')
 
 
-def resolve_png_path(png_dir: Path, base_name: str, optimized: bool) -> Path | None:
-    suffix = '__ee' if optimized else ''
-
-    # Legacy renderer layout.
-    legacy = png_dir / f'{base_name}{suffix}.png'
-    if legacy.is_file():
-        return legacy
-
-    # dm layout.
-    dm = png_dir / '8888' / 'skp' / f'{base_name}{suffix}.skp.png'
-    if dm.is_file():
-        return dm
-
-    return None
-
-
 def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     ratios = np.asarray(ratios, dtype=float)
     ratios = ratios[np.isfinite(ratios) & (ratios > 0)]
@@ -90,6 +74,25 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
         import matplotlib
 
         matplotlib.use('Agg')
+        matplotlib.rcParams['font.family'] = 'sans-serif'
+        matplotlib.rcParams['font.sans-serif'] = ['Public Sans', 'DejaVu Sans', 'Arial']
+        matplotlib.rcParams['font.weight'] = 'semibold'
+        matplotlib.rcParams['axes.labelweight'] = 'bold'
+        matplotlib.rcParams['axes.titleweight'] = 'bold'
+        matplotlib.rcParams['font.size'] = 13
+        matplotlib.rcParams['axes.labelsize'] = 14
+        matplotlib.rcParams['axes.titlesize'] = 15
+        matplotlib.rcParams['xtick.labelsize'] = 12
+        matplotlib.rcParams['ytick.labelsize'] = 12
+        matplotlib.rcParams['text.color'] = 'black'
+        matplotlib.rcParams['axes.labelcolor'] = 'black'
+        matplotlib.rcParams['axes.titlecolor'] = 'black'
+        matplotlib.rcParams['xtick.color'] = 'black'
+        matplotlib.rcParams['ytick.color'] = 'black'
+        matplotlib.rcParams['axes.edgecolor'] = 'black'
+        matplotlib.rcParams['figure.facecolor'] = '#eceff4'
+        matplotlib.rcParams['axes.facecolor'] = '#eceff4'
+        matplotlib.rcParams['savefig.facecolor'] = '#eceff4'
         import matplotlib.pyplot as plt
         from matplotlib.ticker import PercentFormatter
     except ImportError:
@@ -110,15 +113,19 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     x_max += pad
 
     fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
-    ax.step(ratios, y, where='post', linewidth=2, color='#1f77b4')
-    ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--')
+    ax.step(ratios, y, where='post', linewidth=2.4, color='#5e81ac')
+    ax.axvline(1.0, color='#bf616a', linewidth=1.8, linestyle='--')
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(0.0, 1.0)
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    ax.grid(True, which='both', color='#eee')
-    ax.set_xlabel('Baseline / Optimized')
-    ax.set_ylabel('Percent of benchmarks ≤ x')
-    ax.set_title(f'Empirical CDF of speed ratios (n={n})', loc='left', fontsize=10)
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.set_title('Empirical CDF of speed ratios', loc='left', fontsize=15, fontweight='bold')
+    ax.tick_params(axis='both', which='major', width=1.2)
+    for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
+        tick_label.set_fontweight('semibold')
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.2)
 
     fig.tight_layout()
     png_buf = io.BytesIO()
@@ -232,13 +239,13 @@ def main() -> None:
         easteregg = f'{base_name}__ee{suffix}'
         baseline = f'{base_name}{suffix}'
 
-        baseline_png = resolve_png_path(args.png_dir, base_name, optimized=False)
-        ee_png = resolve_png_path(args.png_dir, base_name, optimized=True)
+        baseline_png = args.png_dir / f'{base_name}.png'
+        ee_png = args.png_dir / f'{base_name}__ee.png'
         diff_png = args.png_dir / f'{base_name}__diff.png'
 
         diff_metric: float | None = None
         diff_href: str | None = None
-        if baseline_png is not None and ee_png is not None:
+        if baseline_png.is_file() and ee_png.is_file():
             diff_metric = run_compare(baseline_png, ee_png, diff_png)
             diff_href = f'./pngs/{diff_png.name}'
 

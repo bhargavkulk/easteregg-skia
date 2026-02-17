@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument('--nanobench-dir', type=Path, default=Path('report/nanobench'))
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--samples', type=int, default=100)
-    parser.add_argument('--renderer', type=Path, default=Path('out/Debug/renderer'))
+    parser.add_argument('--renderer', type=Path, default=Path('out/Debug/dm'))
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     parser.add_argument('--backend', type=str, default='gl')
     return parser.parse_args()
@@ -77,14 +77,19 @@ def run_nanobench(
     subprocess.run(cmd, check=True)
 
 
-def run_renderer(binary: Path, input: Path, output: Path):
-    output.parent.mkdir(parents=True, exist_ok=True)
+def run_renderer(binary: Path, input: Path, png_dir: Path):
+    png_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         str(binary),
-        '--input',
+        '--src',
+        'skp',
+        '--skps',
         str(input),
-        '--output',
-        str(output),
+        '--config',
+        '8888',
+        '--writePath',
+        str(png_dir),
+        '-q',
     ]
     subprocess.run(cmd, check=True)
 
@@ -139,10 +144,8 @@ def main():
             args.nanobench, [skp, ee_output], results_file, clip, args.samples, args.backend
         )
 
-        ee_png: Path = args.png_dir / f'{stem}__ee.png'
-        bl_png: Path = args.png_dir / f'{stem}.png'
-        run_renderer(args.renderer, skp, bl_png)
-        run_renderer(args.renderer, ee_output, ee_png)
+        run_renderer(args.renderer, skp, args.png_dir)
+        run_renderer(args.renderer, ee_output, args.png_dir)
 
     print(f'Ran {bench_count} nanobench suites')
 

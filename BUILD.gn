@@ -3759,6 +3759,14 @@ test_app("print_bounds") {
   ]
 }
 
+test_app("unitcases_to_skp") {
+  sources = [ "easteregg/unitcases_to_skp.cpp" ]
+  deps = [
+    ":flags",
+    ":skia",
+  ]
+}
+
 test_app("optbench") {
   sources = [ "easteregg/optbench.cpp" ]
   deps = [
@@ -3776,4 +3784,12 @@ test_app("optimizer_stdout") {
     ":skia",
   ]
   defines = [ "EASTEREGG_PRINT_MATCHES" ]
+}
+
+test_app("fonttest") {
+  sources = [ "easteregg/fonttest.cpp" ]
+  deps = [
+    ":flags",
+    ":skia",
+  ]
 }
