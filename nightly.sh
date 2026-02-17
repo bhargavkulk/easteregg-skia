@@ -6,6 +6,17 @@ export DISPLAY=":$DISPLAY_NUMBER"
 XORG_PID=""
 
 REPORT_DIR=${REPORT_DIR:-$(pwd)/report}
+RENDER_TOOL=${RENDER_TOOL:-dm}
+RENDER_BIN=${RENDER_BIN:-out/Debug/$RENDER_TOOL}
+
+case "$RENDER_TOOL" in
+    dm|renderer) ;;
+    *)
+        echo "Unsupported RENDER_TOOL: $RENDER_TOOL (expected dm or renderer)" >&2
+        exit 1
+        ;;
+esac
+
 mkdir -p "$REPORT_DIR"
 XORG_LOG=${XORG_LOG:-$REPORT_DIR/Xorg-$DISPLAY_NUMBER.log}
 
@@ -33,7 +44,7 @@ trap stop_xorg EXIT
 python3 tools/git-sync-deps
 
 ./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
-ninja -C out/Debug optimizer nanobench dm skp_parser optimizer_stdout
+ninja -C out/Debug optimizer nanobench "$RENDER_TOOL" skp_parser optimizer_stdout
 
 rm -rf opt report
 mkdir opt
@@ -59,7 +70,8 @@ python scripts/run_all_skps.py \
        --nanobench-dir "report/nanobench" \
        --json-dir jsons/ \
        --samples 100 \
-       --renderer out/Debug/dm \
+       --renderer "$RENDER_BIN" \
+       --render-tool "$RENDER_TOOL" \
        --png-dir report/pngs
 
 python scripts/report_gen.py \

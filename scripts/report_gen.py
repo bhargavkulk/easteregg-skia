@@ -3,6 +3,7 @@ import base64
 import html
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -71,12 +72,103 @@ def resolve_png_path(png_dir: Path, base_name: str, optimized: bool) -> Path | N
     if legacy.is_file():
         return legacy
 
-    # dm layout.
+    # dm layout (most common config first).
     dm = png_dir / '8888' / 'skp' / f'{base_name}{suffix}.skp.png'
     if dm.is_file():
         return dm
 
+    # dm layout fallback for any config directory.
+    matches = sorted(png_dir.glob(f'*/skp/{base_name}{suffix}.skp.png'))
+    if matches:
+        return matches[0]
+
     return None
+
+
+def _rel_href(from_dir: Path, to_path: Path) -> str:
+    return os.path.relpath(to_path, from_dir).replace(os.sep, '/')
+
+
+def write_comparison_page(
+    report_index: Path,
+    benchmark: str,
+    baseline_png: Path,
+    optimized_png: Path,
+    diff_png: Path | None,
+) -> str:
+    comparisons_dir = report_index.parent / 'comparisons'
+    comparisons_dir.mkdir(parents=True, exist_ok=True)
+    page_path = comparisons_dir / f'{benchmark}.html'
+
+    baseline_href = _rel_href(page_path.parent, baseline_png)
+    optimized_href = _rel_href(page_path.parent, optimized_png)
+    diff_href = _rel_href(page_path.parent, diff_png) if diff_png is not None else None
+
+    if diff_href is not None:
+        diff_section = (
+            '<div class="panel"><h2>Diff</h2>'
+            + f'<p><a class="button" href="{html.escape(diff_href)}">Open PNG</a></p>'
+            + f'<img alt="{html.escape(benchmark)} diff" src="{html.escape(diff_href)}"/></div>'
+        )
+    else:
+        diff_section = '<div class="panel"><h2>Diff</h2><p>Not generated.</p></div>'
+
+    page_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{html.escape(benchmark)} image comparison</title>
+<style>
+body {{
+    margin: 40px auto;
+    max-width: 800px;
+    line-height: 1.6;
+    font-size: 16px;
+    color: #444;
+    padding: 0 10px;
+}}
+a {{ color: #0366d6; }}
+.grid {{ display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 16px; }}
+.panel {{ border: 1px solid #444; padding: 10px; background: #fff; }}
+.panel h2 {{ margin-top: 0; font-size: 16px; }}
+img {{ max-width: 100%; height: auto; border: 1px solid #444; background: white; }}
+.button {{
+    display: inline-block;
+    padding: 6px 10px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #f2f2f2;
+    color: #222;
+    text-decoration: none;
+    font-size: 14px;
+}}
+.button:hover {{
+    background: #e6e6e6;
+}}
+@media (max-width: 900px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+</style>
+</head>
+<body>
+<p><a class="button" href="{html.escape(_rel_href(page_path.parent, report_index))}">← Back to report</a></p>
+<h1>{html.escape(benchmark)}</h1>
+<div class="grid">
+  <div class="panel">
+    <h2>Pre (Baseline)</h2>
+    <p><a class="button" href="{html.escape(baseline_href)}">Open PNG</a></p>
+    <img alt="{html.escape(benchmark)} baseline" src="{html.escape(baseline_href)}"/>
+  </div>
+  <div class="panel">
+    <h2>Post (Optimized)</h2>
+    <p><a class="button" href="{html.escape(optimized_href)}">Open PNG</a></p>
+    <img alt="{html.escape(benchmark)} optimized" src="{html.escape(optimized_href)}"/>
+  </div>
+  {diff_section}
+</div>
+</body>
+</html>
+"""
+    page_path.write_text(page_html, encoding='utf-8')
+    return _rel_href(report_index.parent, page_path)
 
 
 def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
@@ -240,7 +332,14 @@ def main() -> None:
         diff_href: str | None = None
         if baseline_png is not None and ee_png is not None:
             diff_metric = run_compare(baseline_png, ee_png, diff_png)
-            diff_href = f'./pngs/{diff_png.name}'
+            generated_diff_png = diff_png if diff_png.is_file() else None
+            diff_href = write_comparison_page(
+                args.output,
+                base_name,
+                baseline_png,
+                ee_png,
+                generated_diff_png,
+            )
 
         eesamples = collect_stats(base_name, easteregg)
         blsamples = collect_stats(base_name, baseline)

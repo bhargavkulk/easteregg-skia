@@ -16,6 +16,13 @@ def parse_args():
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--samples', type=int, default=100)
     parser.add_argument('--renderer', type=Path, default=Path('out/Debug/dm'))
+    parser.add_argument(
+        '--render-tool',
+        type=str,
+        choices=('dm', 'renderer'),
+        default='dm',
+        help='Tool used to rasterize SKPs into PNGs.',
+    )
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
     parser.add_argument('--backend', type=str, default='gl')
     return parser.parse_args()
@@ -77,20 +84,32 @@ def run_nanobench(
     subprocess.run(cmd, check=True)
 
 
-def run_renderer(binary: Path, input: Path, png_dir: Path):
+def run_renderer(binary: Path, input: Path, png_dir: Path, render_tool: str) -> None:
     png_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(binary),
-        '--src',
-        'skp',
-        '--skps',
-        str(input),
-        '--config',
-        '8888',
-        '--writePath',
-        str(png_dir),
-        '-q',
-    ]
+
+    if render_tool == 'dm':
+        cmd = [
+            str(binary),
+            '--src',
+            'skp',
+            '--skps',
+            str(input),
+            '--config',
+            '8888',
+            '--writePath',
+            str(png_dir),
+            '-q',
+        ]
+    else:
+        output = png_dir / f'{input.stem}.png'
+        cmd = [
+            str(binary),
+            '--input',
+            str(input),
+            '--output',
+            str(output),
+        ]
+
     subprocess.run(cmd, check=True)
 
 
@@ -144,8 +163,8 @@ def main():
             args.nanobench, [skp, ee_output], results_file, clip, args.samples, args.backend
         )
 
-        run_renderer(args.renderer, skp, args.png_dir)
-        run_renderer(args.renderer, ee_output, args.png_dir)
+        run_renderer(args.renderer, skp, args.png_dir, args.render_tool)
+        run_renderer(args.renderer, ee_output, args.png_dir, args.render_tool)
 
     print(f'Ran {bench_count} nanobench suites')
 
