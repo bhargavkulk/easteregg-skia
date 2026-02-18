@@ -3740,6 +3740,7 @@ test_app("optimizer") {
     ":easteregg",
     ":flags",
     ":skia",
+    ":tool_utils",
   ]
 }
 
@@ -3748,6 +3749,16 @@ test_app("renderer") {
   deps = [
     ":flags",
     ":skia",
+  ]
+}
+
+test_app("renderer_opt") {
+  sources = [ "easteregg/renderer_opt.cpp" ]
+  deps = [
+    ":easteregg",
+    ":flags",
+    ":skia",
+    ":tool_utils",
   ]
 }
 
@@ -3782,6 +3793,7 @@ test_app("optimizer_stdout") {
     ":easteregg",
     ":flags",
     ":skia",
+    ":tool_utils",
   ]
   defines = [ "EASTEREGG_PRINT_MATCHES" ]
 }

@@ -4,14 +4,19 @@
 #include <string>
 #include "easteregg/easteregg.h"
 #include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
+#include "include/core/SkFontMgr.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
+#include "include/core/SkSerialProcs.h"
 #include "include/core/SkStream.h"
+#include "include/core/SkTypeface.h"
 #include "src/core/SkRecord.h"
 #include "src/core/SkRecordCanvas.h"
 #include "src/core/SkRecordDraw.h"
 #include "src/core/SkRecordOpts.h"
 #include "tools/flags/CommandLineFlags.h"
+#include "tools/fonts/FontToolUtils.h"
 
 #ifdef DEBUG
 #define DPRINT(x) std::cout << x << std::endl
@@ -24,6 +29,28 @@
 static DEFINE_string(input, "", "Input .skp file");
 static DEFINE_string(output, "optimized.skp", "Output .skp file");
 static DEFINE_string(transform, "easteregg", "Transform to run: easteregg, skrecordopt, or none");
+
+static sk_sp<SkData> SerializeTypefaceWithData(SkTypeface* typeface, void*) {
+    if (!typeface) {
+        return nullptr;
+    }
+    return typeface->serialize(SkTypeface::SerializeBehavior::kDoIncludeData);
+}
+
+static sk_sp<SkImage> DeserializeImageLikeDM(const void* data, size_t size, void*) {
+    sk_sp<SkData> tmpData = SkData::MakeWithoutCopy(data, size);
+    sk_sp<SkImage> image = SkImages::DeferredFromEncodedData(std::move(tmpData));
+    return image ? image->makeRasterImage(nullptr) : nullptr;
+}
+
+static sk_sp<SkTypeface> DeserializeTypefaceLikeDM(const void* data, size_t, void*) {
+    if (!data) {
+        return nullptr;
+    }
+
+    SkStream** stream = reinterpret_cast<SkStream**>(const_cast<void*>(data));
+    return SkTypeface::MakeDeserialize(*stream, ToolUtils::TestFontMgr());
+}
 
 sk_sp<SkPicture> PictureFromRecord(const SkRecord& records, const SkRect& bounds) {
     SkPictureRecorder recorder;
@@ -41,7 +68,10 @@ bool writePictureToSkp(const sk_sp<SkPicture>& picture, const std::string& path)
     }
     SkFILEWStream stream(path.c_str());
     if (!stream.isValid()) return false;
-    picture->serialize(&stream);
+
+    SkSerialProcs serialProcs;
+    serialProcs.fTypefaceProc = SerializeTypefaceWithData;
+    picture->serialize(&stream, &serialProcs);
     return true;
 }
 
@@ -61,7 +91,11 @@ int main(int argc, char** argv) {
 
     const std::string outputPath = FLAGS_output[0];
 
-    sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream));
+    SkDeserialProcs deserialProcs;
+    deserialProcs.fImageProc = DeserializeImageLikeDM;
+    deserialProcs.fTypefaceProc = DeserializeTypefaceLikeDM;
+
+    sk_sp<SkPicture> picture(SkPicture::MakeFromStream(&stream, &deserialProcs));
     if (!picture) {
         ERROR("Error loading skp from %s", FLAGS_input[0]);
         return 1;
@@ -82,10 +116,19 @@ int main(int argc, char** argv) {
     GradientDstInToMasks opt3;
     DstInToClip opt4;
 
-    opt3.transform(&records);
-    opt2.transform(&records);
-    opt4.transform(&records);
-    opt1.transform(&records);
+    if (transform == "none") {
+        // Intentionally no-op: round-trip only.
+    } else if (transform == "skrecordopt") {
+        SkRecordOptimize(&records);
+    } else if (transform == "easteregg") {
+        opt3.transform(&records);
+        opt2.transform(&records);
+        opt4.transform(&records);
+        opt1.transform(&records);
+    } else {
+        ERROR("Unknown transform '%s' (expected easteregg, skrecordopt, or none)", transform.c_str());
+        return 1;
+    }
 
 #ifdef EASTEREGG_PRINT_MATCHES
     const int totalMatches =

@@ -6,13 +6,13 @@ export DISPLAY=":$DISPLAY_NUMBER"
 XORG_PID=""
 
 REPORT_DIR=${REPORT_DIR:-$(pwd)/report}
-RENDER_TOOL=${RENDER_TOOL:-dm}
+RENDER_TOOL=${RENDER_TOOL:-renderer_opt}
 RENDER_BIN=${RENDER_BIN:-out/Debug/$RENDER_TOOL}
 
 case "$RENDER_TOOL" in
-    dm|renderer) ;;
+    dm|renderer|renderer_opt) ;;
     *)
-        echo "Unsupported RENDER_TOOL: $RENDER_TOOL (expected dm or renderer)" >&2
+        echo "Unsupported RENDER_TOOL: $RENDER_TOOL (expected dm, renderer, or renderer_opt)" >&2
         exit 1
         ;;
 esac

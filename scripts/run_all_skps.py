@@ -15,12 +15,12 @@ def parse_args():
     parser.add_argument('--nanobench-dir', type=Path, default=Path('report/nanobench'))
     parser.add_argument('--json-dir', type=Path, default=Path('jsons'))
     parser.add_argument('--samples', type=int, default=100)
-    parser.add_argument('--renderer', type=Path, default=Path('out/Debug/dm'))
+    parser.add_argument('--renderer', type=Path, default=Path('out/Debug/renderer_opt'))
     parser.add_argument(
         '--render-tool',
         type=str,
-        choices=('dm', 'renderer'),
-        default='dm',
+        choices=('dm', 'renderer', 'renderer_opt'),
+        default='renderer_opt',
         help='Tool used to rasterize SKPs into PNGs.',
     )
     parser.add_argument('--png-dir', type=Path, default=Path('report/pngs'))
@@ -50,9 +50,17 @@ def run_cmd(cmd: list[str]) -> None:
         raise RuntimeError(f'Command failed ({result.returncode}): {" ".join(cmd)}\n{stderr}')
 
 
-def run_optimizer(binary: Path, skp: Path, output: Path) -> None:
+def run_optimizer(binary: Path, skp: Path, output: Path, transform: str) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [str(binary), '--input', str(skp), '--output', str(output)]
+    cmd = [
+        str(binary),
+        '--input',
+        str(skp),
+        '--output',
+        str(output),
+        '--transform',
+        transform,
+    ]
     run_cmd(cmd)
 
 
@@ -84,8 +92,15 @@ def run_nanobench(
     subprocess.run(cmd, check=True)
 
 
-def run_renderer(binary: Path, input: Path, png_dir: Path, render_tool: str) -> None:
-    png_dir.mkdir(parents=True, exist_ok=True)
+def run_renderer(
+    binary: Path,
+    input: Path,
+    output: Path,
+    render_tool: str,
+    opt: bool = False,
+    transform: str = 'easteregg',
+) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     if render_tool == 'dm':
         cmd = [
@@ -97,11 +112,22 @@ def run_renderer(binary: Path, input: Path, png_dir: Path, render_tool: str) -> 
             '--config',
             '8888',
             '--writePath',
-            str(png_dir),
+            str(output.parent),
             '-q',
         ]
+    elif render_tool == 'renderer_opt':
+        cmd = [
+            str(binary),
+            '--input',
+            str(input),
+            '--output',
+            str(output),
+            '--opt',
+            'true' if opt else 'false',
+            '--transform',
+            transform,
+        ]
     else:
-        output = png_dir / f'{input.stem}.png'
         cmd = [
             str(binary),
             '--input',
@@ -155,16 +181,24 @@ def main():
 
         bench_count += 1
 
+        none_output: Path = args.opt_dir / f'{stem}.skp'
         ee_output: Path = args.opt_dir / f'{stem}__ee.skp'
-        run_optimizer(args.optimizer, skp, ee_output)
+        run_optimizer(args.optimizer, skp, none_output, 'none')
+        run_optimizer(args.optimizer, skp, ee_output, 'easteregg')
 
         results_file = args.nanobench_dir / f'{stem}__nanobench.json'
         run_nanobench(
-            args.nanobench, [skp, ee_output], results_file, clip, args.samples, args.backend
+            args.nanobench, [none_output, ee_output], results_file, clip, args.samples, args.backend
         )
 
-        run_renderer(args.renderer, skp, args.png_dir, args.render_tool)
-        run_renderer(args.renderer, ee_output, args.png_dir, args.render_tool)
+        bl_png: Path = args.png_dir / f'{stem}.png'
+        ee_png: Path = args.png_dir / f'{stem}__ee.png'
+        if args.render_tool == 'renderer_opt':
+            run_renderer(args.renderer, skp, bl_png, args.render_tool, opt=False, transform='none')
+            run_renderer(args.renderer, skp, ee_png, args.render_tool, opt=True, transform='easteregg')
+        else:
+            run_renderer(args.renderer, none_output, bl_png, args.render_tool)
+            run_renderer(args.renderer, ee_output, ee_png, args.render_tool)
 
     print(f'Ran {bench_count} nanobench suites')
 
