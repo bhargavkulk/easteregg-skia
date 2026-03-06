@@ -17,6 +17,8 @@ struct RemoveOpaqueSaveLayers {
 
 private:
     enum class MatchState { Matching, Ignore };
+    mutable skia_private::STArray<8, MatchState> state_stack;
+    mutable skia_private::STArray<8, int> index_stack;
 
     void dbg();
 
@@ -24,8 +26,6 @@ private:
     mutable SkRecords::Is<SkRecords::Save> isSave;
     mutable SkRecords::Is<SkRecords::Restore> isRestore;
     mutable SkRecords::IsSingleDraw isDraw;
-    mutable skia_private::STArray<8, MatchState> state_stack;
-    mutable skia_private::STArray<8, int> index_stack;
     mutable int match_count = 0;
 };
 

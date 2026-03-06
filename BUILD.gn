@@ -3798,6 +3798,16 @@ test_app("optimizer_stdout") {
   defines = [ "EASTEREGG_PRINT_MATCHES" ]
 }
 
+test_app("optimizer_dump_passes") {
+  sources = [ "easteregg/optimizer_dump_passes.cpp" ]
+  deps = [
+    ":easteregg",
+    ":flags",
+    ":skia",
+    ":tool_utils",
+  ]
+}
+
 test_app("fonttest") {
   sources = [ "easteregg/fonttest.cpp" ]
   deps = [
