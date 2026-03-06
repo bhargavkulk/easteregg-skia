@@ -395,6 +395,7 @@ def main() -> None:
     body_content = (
         '\n'.join(table_rows) if s else '<p>No benchmarks with save layers were found.</p>'
     )
+    benchmark_count = len(s)
 
     table_json = None
     if args.table_json is not None:
@@ -507,6 +508,7 @@ table tr:hover {{
 </head>
 <body>
 <h1>{html.escape(args.title)}</h1>
+<p><strong>Benchmarks:</strong> <code>{benchmark_count}</code></p>
 <p><em>All time units are in ms</em></p>
 <p><em>Optbench timer overhead: {html.escape(overhead_display)} ns</em></p>
 <table class="table-sort table-arrows remember-sort">
