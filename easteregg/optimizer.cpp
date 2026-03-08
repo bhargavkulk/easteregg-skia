@@ -131,9 +131,22 @@ int main(int argc, char** argv) {
     }
 
 #ifdef EASTEREGG_PRINT_MATCHES
-    const int totalMatches =
-            opt1.matchCount() + opt2.matchCount() + opt3.matchCount() + opt4.matchCount();
-    printf("%d\n", totalMatches);
+    const int removeOpaqueSaveLayersMatches = opt1.matchCount();
+    const int removeLoneLumaMatches = opt2.matchCount();
+    const int gradientDstInToMasksMatches = opt3.matchCount();
+    const int dstInToClipMatches = opt4.matchCount();
+    const int totalMatches = removeOpaqueSaveLayersMatches + removeLoneLumaMatches +
+                             gradientDstInToMasksMatches + dstInToClipMatches;
+
+    // Emit machine-readable output for report generation.
+    printf(
+            "{\"transform\":\"%s\",\"total_matches\":%d,"
+            "\"passes\":{\"GradientDstInToMasks\":%d,"
+            "\"RemoveLoneLuma\":%d,"
+            "\"DstInToClip\":%d,"
+            "\"RemoveOpaqueSaveLayers\":%d}}\n",
+            transform.c_str(), totalMatches, gradientDstInToMasksMatches,
+            removeLoneLumaMatches, dstInToClipMatches, removeOpaqueSaveLayersMatches);
 #endif
 
 #ifndef EASTEREGG_PRINT_MATCHES

@@ -428,6 +428,19 @@ void DstInToClip::transform(SkRecord* records) const {
             if (!state_stack.empty() && state_stack.back().state == MatchState::MatchOuter) {
                 state_stack.back().state = MatchState::MatchSave;
             }
+        } else if (IS_RECORD(isConcat44)) {
+            if (state_stack.empty()) {
+                continue;
+            }
+
+            if (state_stack.back().state == MatchState::MatchDstIn ||
+                state_stack.back().state == MatchState::MatchDraw) {
+                state_stack.back().state = MatchState::Ignore;
+                SkASSERTF(state_stack.size() >= 2, "DstInToClip: expected outer state");
+                state_stack[state_stack.size() - 2].state = MatchState::Ignore;
+            } else if (state_stack.back().state != MatchState::Ignore) {
+                state_stack.back().state = MatchState::Ignore;
+            }
         } else if (IS_RECORD(isRestore)) {
             // take care of the save restore pairs first
             if (state_stack.empty() || state_stack.back().saveCount < saveCount) {

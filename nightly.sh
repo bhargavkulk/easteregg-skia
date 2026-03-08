@@ -70,8 +70,8 @@ python scripts/run_all_skps.py \
        --nanobench-dir "report/nanobench" \
        --json-dir jsons/ \
        --samples 100 \
-       --renderer "$RENDER_BIN" \
-       --render-tool "$RENDER_TOOL" \
+       --renderer out/Debug/renderer_opt \
+       --render-tool renderer_opt \
        --png-dir report/pngs
 
 python scripts/report_gen.py \

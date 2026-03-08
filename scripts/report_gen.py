@@ -26,12 +26,56 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
+    parser.add_argument('--backend-name', type=str, default='ganesh-opengl')
     parser.add_argument('--skp-dir', type=Path, default=Path('skps'))
     parser.add_argument('--optimizer-stdout', type=Path, default=Path('out/Debug/optimizer_stdout'))
     return parser.parse_args()
 
 
 FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
+
+
+def backend_macro_prefix(backend_name: str, backend: str) -> str:
+    token_map = {
+        'graphite': 'gr',
+        'ganesh': 'ga',
+        'opengl': 'gl',
+        'metal': 'metal',
+        'vulkan': 'vk',
+        'dawn': 'dawn',
+        'angle': 'angle',
+    }
+    tokens = [t for t in re.split(r'[^a-z0-9]+', backend_name.lower()) if t]
+    if not tokens:
+        tokens = [t for t in re.split(r'[^a-z0-9]+', backend.lower()) if t]
+    prefix = ''.join(token_map.get(t, t[:3]) for t in tokens)
+    if not prefix:
+        prefix = 'backend'
+    if prefix[0].isdigit():
+        prefix = f'b{prefix}'
+    return prefix
+
+
+def latex_escape_text(value: str) -> str:
+    return (
+        value.replace('\\', r'\textbackslash{}')
+        .replace('{', r'\{')
+        .replace('}', r'\}')
+        .replace('_', r'\_')
+        .replace('%', r'\%')
+        .replace('&', r'\&')
+        .replace('#', r'\#')
+    )
+
+
+def latex_macro_value(value: object) -> str:
+    if value is None:
+        return 'n/a'
+    if isinstance(value, float):
+        return f'{value:.3f}'
+    if isinstance(value, int):
+        return str(value)
+    return latex_escape_text(str(value))
 
 
 def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
@@ -171,7 +215,15 @@ img {{ max-width: 100%; height: auto; border: 1px solid #444; background: white;
     return _rel_href(report_index.parent, page_path)
 
 
-def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
+def empirical_cdf_png_base64_logx(
+    ratios: np.ndarray,
+    backend_name: str,
+    title_prefix: str,
+    line_label: str,
+    x_label: str,
+    line_color: str = '#1f77b4',
+    line_style: str = '-',
+) -> tuple[str, str | None]:
     ratios = np.asarray(ratios, dtype=float)
     ratios = ratios[np.isfinite(ratios) & (ratios > 0)]
     n = int(ratios.size)
@@ -182,6 +234,16 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
         import matplotlib
 
         matplotlib.use('Agg')
+        matplotlib.rcParams['font.family'] = 'serif'
+        matplotlib.rcParams['font.serif'] = [
+            'Linux Libertine O',
+            'Linux Libertine',
+            'DejaVu Serif',
+            'Times New Roman',
+            'Times',
+            'serif',
+        ]
+        matplotlib.rcParams['svg.fonttype'] = 'none'
         import matplotlib.pyplot as plt
         from matplotlib.ticker import PercentFormatter
     except ImportError:
@@ -202,16 +264,28 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     x_max += pad
 
     fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
-    ax.step(ratios, y, where='post', linewidth=2, color='#1f77b4')
+    ax.step(
+        ratios,
+        y,
+        where='post',
+        linewidth=2,
+        color=line_color,
+        linestyle=line_style,
+        label=f'{line_label} (n={n})',
+    )
     ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--')
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(0.0, 1.0)
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    ax.grid(True, which='both', color='#eee')
-    ax.set_xlabel('Baseline / Optimized')
-    ax.set_ylabel('Percent of benchmarks ≤ x')
-    ax.set_title(f'Empirical CDF of speed ratios (n={n})', loc='left', fontsize=10)
-
+    ax.set_xlabel(x_label)
+    ax.set_ylabel('Benchmarks at or below this speedup')
+    ax.set_title(
+        f'{title_prefix}\n(on {backend_name} backend, n={n})',
+        loc='center',
+        x=0.5,
+        ha='center',
+        fontsize=10,
+    )
     fig.tight_layout()
     png_buf = io.BytesIO()
     fig.savefig(png_buf, format='png', bbox_inches='tight')
@@ -229,9 +303,75 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     return img_html, svg_text
 
 
-def run_optimizer_stdout(binary: Path, skp: Path) -> Optional[int]:
+def opt_time_vs_commands_png_base64(
+    command_counts: np.ndarray, opt_times_ms: np.ndarray, backend_name: str
+) -> tuple[str, str | None]:
+    x = np.asarray(command_counts, dtype=float)
+    y = np.asarray(opt_times_ms, dtype=float)
+    valid = np.isfinite(x) & np.isfinite(y) & (x > 0) & (y >= 0)
+    x = x[valid]
+    y = y[valid]
+    n = int(x.size)
+    if n == 0:
+        return '<p>No opt-time data to plot.</p>', None
+
+    try:
+        import matplotlib
+
+        matplotlib.use('Agg')
+        matplotlib.rcParams['font.family'] = 'serif'
+        matplotlib.rcParams['font.serif'] = [
+            'Linux Libertine O',
+            'Linux Libertine',
+            'DejaVu Serif',
+            'Times New Roman',
+            'Times',
+            'serif',
+        ]
+        matplotlib.rcParams['svg.fonttype'] = 'none'
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return '<p>matplotlib is not available; cannot render the opt-time plot.</p>', None
+
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    ax.scatter(x, y, s=14, alpha=0.8, color='#1f77b4')
+
+    if n >= 2:
+        slope, intercept = np.polyfit(x, y, 1)
+        xfit = np.linspace(float(np.min(x)), float(np.max(x)), 200)
+        yfit = slope * xfit + intercept
+        ax.plot(xfit, yfit, linewidth=1.8, color='#c00', linestyle='--')
+
+    ax.set_xlabel('# Commands in SKP')
+    ax.set_ylabel('OptTime (ms)')
+    ax.set_title(
+        f'OptTime vs command count\n(on {backend_name} backend, n={n})',
+        loc='center',
+        x=0.5,
+        ha='center',
+        fontsize=10,
+    )
+
+    fig.tight_layout()
+    png_buf = io.BytesIO()
+    fig.savefig(png_buf, format='png', bbox_inches='tight')
+    svg_buf = io.BytesIO()
+    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
+    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
+
+    img_html = (
+        '<img alt="OptTime vs command count plot" style="max-width:100%;height:auto" '
+        f'src="data:image/png;base64,{img_b64}"/>'
+    )
+    return img_html, svg_text
+
+
+def run_optimizer_stdout(binary: Path, skp: Path) -> tuple[Optional[int], dict[str, int]]:
     if not binary.is_file() or not skp.is_file():
-        return None
+        return None, {}
 
     cmd = [str(binary), '--input', str(skp)]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -242,23 +382,82 @@ def run_optimizer_stdout(binary: Path, skp: Path) -> Optional[int]:
             f'optimizer_stdout failed for {skp} ({result.returncode}): {stderr}',
             file=sys.stderr,
         )
-        return None
+        return None, {}
 
-    match = re.search(r'\d+', result.stdout.strip())
-    return int(match.group(0)) if match else None
+    output = result.stdout.strip()
+    if not output:
+        return None, {}
+
+    # New format: JSON object with total and per-pass counts.
+    for line in reversed(output.splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(payload, dict):
+            total_matches = payload.get('total_matches')
+            if not isinstance(total_matches, int):
+                total_matches = None
+
+            pass_counts_raw = payload.get('passes')
+            pass_counts: dict[str, int] = {}
+            if isinstance(pass_counts_raw, dict):
+                for name, count in pass_counts_raw.items():
+                    if isinstance(name, str) and isinstance(count, int):
+                        pass_counts[name] = count
+
+            return total_matches, pass_counts
+
+    # Legacy format: a single integer on stdout.
+    match = re.search(r'\d+', output)
+    return (int(match.group(0)) if match else None), {}
+
+
+def format_pass_counts(pass_counts: dict[str, int]) -> str:
+    if not pass_counts:
+        return '&mdash;'
+
+    pieces = [f'{name}:{count}' for name, count in sorted(pass_counts.items())]
+    return f'<code>{html.escape(", ".join(pieces))}</code>'
 
 
 def main() -> None:
     args = parse_args()
 
-    def collect_stats(stem: str, benchmark_name: str):
+    def collect_stats(stem: str, benchmark_name: str) -> Optional[np.ndarray]:
         bench_file = args.nanobench_dir / f'{stem}__nanobench.json'
 
         with bench_file.open(encoding='utf-8') as f:
             timing_data = json.load(f)
 
-        gl_data = timing_data['results'][benchmark_name][args.backend]
-        samples: list[float] = gl_data['samples']
+        results = timing_data.get('results', {})
+        bench_result = results.get(benchmark_name)
+        if not isinstance(bench_result, dict):
+            print(
+                f'skipping {stem}: benchmark key not found in nanobench file ({benchmark_name})',
+                file=sys.stderr,
+            )
+            return None
+
+        backend_data = bench_result.get(args.backend)
+        if not isinstance(backend_data, dict):
+            print(
+                f'skipping {stem}: backend {args.backend!r} missing in nanobench file',
+                file=sys.stderr,
+            )
+            return None
+
+        samples = backend_data.get('samples')
+        if not isinstance(samples, list) or not samples:
+            print(
+                f'skipping {stem}: no samples for backend {args.backend!r}',
+                file=sys.stderr,
+            )
+            return None
 
         return np.asarray(samples, dtype=float)
 
@@ -298,6 +497,7 @@ def main() -> None:
             int,
             float,
             Optional[int],
+            dict[str, int],
         ]
     ] = []
 
@@ -343,6 +543,8 @@ def main() -> None:
 
         eesamples = collect_stats(base_name, easteregg)
         blsamples = collect_stats(base_name, baseline)
+        if eesamples is None or blsamples is None:
+            continue
 
         eemean = geom_mean(eesamples)
         blmean = geom_mean(blsamples)
@@ -351,15 +553,37 @@ def main() -> None:
 
         opt_geomean = optbench_by_stem.get(base_name)
         skp_path = args.skp_dir / f'{base_name}.skp'
-        matches = run_optimizer_stdout(args.optimizer_stdout, skp_path)
+        matches, pass_counts = run_optimizer_stdout(args.optimizer_stdout, skp_path)
         s.append(
-            (base_name, eemean, blmean, opt_geomean, diff_metric, diff_href, length, p, matches)
+            (
+                base_name,
+                eemean,
+                blmean,
+                opt_geomean,
+                diff_metric,
+                diff_href,
+                length,
+                p,
+                matches,
+                pass_counts,
+            )
         )
 
     table_rows = [
-        '<tr><th>Benchmark</th><th>#cmds</th><th>Easteregg</th><th>Baseline</th><th>OptTime</th><th>Diff</th><th>Speedup</th><th>#matches</th><th>p</th></tr>'
+        '<tr><th>Benchmark</th><th>#cmds</th><th>Easteregg</th><th>Baseline</th><th>OptTime</th><th>Diff</th><th>Speedup</th><th>#matches</th><th>Pass Counts</th><th>p</th></tr>'
     ]
-    for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p, matches in s:
+    for (
+        name,
+        eemean,
+        blmean,
+        opt_geomean,
+        diff_metric,
+        diff_href,
+        cmds_len,
+        p,
+        matches,
+        pass_counts,
+    ) in s:
         speedup = blmean / eemean
         if diff_metric is not None and diff_href:
             diff_display = f'<a href="{html.escape(diff_href)}"><code>{diff_metric:g}</code></a>'
@@ -377,6 +601,7 @@ def main() -> None:
             matches_display = f'<code>{matches}</code>'
         else:
             matches_display = '&mdash;'
+        pass_counts_display = format_pass_counts(pass_counts)
 
         table_rows.append(
             '<tr>'
@@ -388,6 +613,7 @@ def main() -> None:
             f'<td style="text-align:end">{diff_display}</td>'
             f'<td style="text-align:end;color:{"green" if speedup > 1.0 else "red"}"><code>{speedup:.3f}</code></td>'
             f'<td style="text-align:end">{matches_display}</td>'
+            f'<td>{pass_counts_display}</td>'
             f'<td style="text-align:end"><code>{p:.4g}</code></td>'
             '</tr>'
         )
@@ -408,10 +634,22 @@ def main() -> None:
             {'key': 'diff_metric', 'label': 'Diff'},
             {'key': 'speedup', 'label': 'Speedup'},
             {'key': 'matches', 'label': '#matches'},
+            {'key': 'pass_counts', 'label': 'Pass Counts'},
             {'key': 'p_value', 'label': 'p'},
         ]
         rows = []
-        for name, eemean, blmean, opt_geomean, diff_metric, diff_href, cmds_len, p, matches in s:
+        for (
+            name,
+            eemean,
+            blmean,
+            opt_geomean,
+            diff_metric,
+            diff_href,
+            cmds_len,
+            p,
+            matches,
+            pass_counts,
+        ) in s:
             rows.append(
                 {
                     'benchmark': format_name(name),
@@ -425,6 +663,7 @@ def main() -> None:
                     'diff_href': diff_href,
                     'speedup': blmean / eemean,
                     'matches': matches,
+                    'pass_counts': pass_counts,
                     'p_value': p,
                 }
             )
@@ -438,11 +677,184 @@ def main() -> None:
 
     # Per-benchmark speed ratios: baseline_geomean / optimized_geomean (optimized = easteregg).
     ratios = np.asarray([blmean / eemean for _name, eemean, blmean, *_rest in s], dtype=float)
+    total_ratios = np.asarray(
+        [
+            (row[2] / (row[1] + row[3]))
+            for row in s
+            if isinstance(row[3], (int, float)) and np.isfinite(row[3]) and (row[1] + row[3]) > 0
+        ],
+        dtype=float,
+    )
+    backend_prefix = backend_macro_prefix(args.backend_name, args.backend)
+    if ratios.size > 0:
+        pct_speedup_gt_one = 100.0 * float(np.mean(ratios > 1.0))
+        speedup_gt_one_display = f'{pct_speedup_gt_one:.1f}%'
+        pct_slowdowns = 100.0 * float(np.mean(ratios < 1.0))
+        slowdowns_display = f'{pct_slowdowns:.1f}%'
+        max_speedup = float(np.max(ratios))
+        max_speedup_display = f'{max_speedup:.3f}x'
+    else:
+        pct_speedup_gt_one = None
+        pct_slowdowns = None
+        max_speedup = None
+        speedup_gt_one_display = 'n/a'
+        slowdowns_display = 'n/a'
+        max_speedup_display = 'n/a'
+
+    slowdown_rows = [row for row in s if (row[2] / row[1]) < 1.0]
+    slowdown_count = len(slowdown_rows)
+    slowdown_no_match_count = sum(1 for row in slowdown_rows if row[8] == 0)
+    if slowdown_count > 0:
+        pct_slowdown_no_matches = 100.0 * slowdown_no_match_count / slowdown_count
+        slowdown_no_matches_fraction_display = (
+            f'{slowdown_no_match_count}/{slowdown_count} '
+            f'({pct_slowdown_no_matches:.1f}%)'
+        )
+    else:
+        pct_slowdown_no_matches = None
+        slowdown_no_matches_fraction_display = 'n/a'
+
+    speedup_rows = [row for row in s if (row[2] / row[1]) > 1.0]
+    speedup_count = len(speedup_rows)
+    speedup_with_match_count = sum(1 for row in speedup_rows if isinstance(row[8], int) and row[8] > 0)
+    speedup_without_match_count = sum(1 for row in speedup_rows if row[8] == 0)
+    speedup_with_match_values = [
+        (row[2] / row[1]) for row in speedup_rows if isinstance(row[8], int) and row[8] > 0
+    ]
+    speedup_without_match_values = [
+        (row[2] / row[1]) for row in speedup_rows if row[8] == 0
+    ]
+    if benchmark_count > 0:
+        pct_benchmarks_with_matches_and_speedup = 100.0 * speedup_with_match_count / benchmark_count
+        benchmarks_with_matches_and_speedup_display = (
+            f'{speedup_with_match_count}/{benchmark_count} '
+            f'({pct_benchmarks_with_matches_and_speedup:.1f}%)'
+        )
+    else:
+        pct_benchmarks_with_matches_and_speedup = None
+        benchmarks_with_matches_and_speedup_display = 'n/a'
+    if speedup_count > 0:
+        pct_speedup_with_matches = 100.0 * speedup_with_match_count / speedup_count
+        pct_speedup_without_matches = 100.0 * speedup_without_match_count / speedup_count
+        speedup_with_matches_fraction_display = (
+            f'{speedup_with_match_count}/{speedup_count} '
+            f'({pct_speedup_with_matches:.1f}%)'
+        )
+        speedup_without_matches_fraction_display = (
+            f'{speedup_without_match_count}/{speedup_count} '
+            f'({pct_speedup_without_matches:.1f}%)'
+        )
+    else:
+        pct_speedup_with_matches = None
+        pct_speedup_without_matches = None
+        speedup_with_matches_fraction_display = 'n/a'
+        speedup_without_matches_fraction_display = 'n/a'
+    if speedup_with_match_values:
+        speedup_with_matches_min = min(speedup_with_match_values)
+        speedup_with_matches_max = max(speedup_with_match_values)
+        speedup_with_matches_range_display = (
+            f'{speedup_with_matches_min:.3f}x to {speedup_with_matches_max:.3f}x'
+        )
+    else:
+        speedup_with_matches_min = None
+        speedup_with_matches_max = None
+        speedup_with_matches_range_display = 'n/a'
+    if speedup_without_match_values:
+        speedup_without_matches_min = min(speedup_without_match_values)
+        speedup_without_matches_max = max(speedup_without_match_values)
+        speedup_without_matches_range_display = (
+            f'{speedup_without_matches_min:.3f}x to {speedup_without_matches_max:.3f}x'
+        )
+    else:
+        speedup_without_matches_min = None
+        speedup_without_matches_max = None
+        speedup_without_matches_range_display = 'n/a'
+
+    non_slowdown_nonzero_match_rows = [
+        row for row in speedup_rows if isinstance(row[8], int) and row[8] > 0
+    ]
+    if non_slowdown_nonzero_match_rows:
+        min_nonzero_matches = min(int(row[8]) for row in non_slowdown_nonzero_match_rows)
+        min_speedup_at_min_matches = min(
+            (row[2] / row[1]) for row in non_slowdown_nonzero_match_rows if row[8] == min_nonzero_matches
+        )
+        min_speedup_for_min_nonzero_matches_display = (
+            f'matches={min_nonzero_matches}, min speedup={min_speedup_at_min_matches:.3f}x'
+        )
+    else:
+        min_nonzero_matches = None
+        min_speedup_at_min_matches = None
+        min_speedup_for_min_nonzero_matches_display = 'n/a'
+
+    pass_totals: dict[str, int] = {}
+    for row in s:
+        for pass_name, count in row[9].items():
+            if count > 0:
+                pass_totals[pass_name] = pass_totals.get(pass_name, 0) + count
+
+    if pass_totals:
+        most_common_name, most_common_count = max(
+            sorted(pass_totals.items()), key=lambda item: item[1]
+        )
+        total_firings = sum(pass_totals.values())
+        pct_most_common_optimization = 100.0 * most_common_count / total_firings
+        most_common_optimization_display = (
+            f'{most_common_name} ({most_common_count}/{total_firings}, '
+            f'{pct_most_common_optimization:.1f}%)'
+        )
+    else:
+        most_common_name = None
+        most_common_count = None
+        total_firings = None
+        pct_most_common_optimization = None
+        most_common_optimization_display = 'n/a'
+
     if isinstance(optbench_timer_overhead_ns, (int, float)):
+        timer_overhead_ns = float(optbench_timer_overhead_ns)
         overhead_display = f'{optbench_timer_overhead_ns:.2f}'
     else:
+        timer_overhead_ns = None
         overhead_display = 'n/a'
-    cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios)
+    latex_macros = [
+        ('numbench', benchmark_count),
+        ('numspeed', speedup_count),
+        ('numslow', slowdown_count),
+        ('pctspeed', pct_speedup_gt_one),
+        ('pctslow', pct_slowdowns),
+        ('numspmatch', speedup_with_match_count),
+        ('numspnomatch', speedup_without_match_count),
+        ('pctspmatch', pct_speedup_with_matches),
+        ('pctspnomatch', pct_speedup_without_matches),
+        ('numbenchspmatch', speedup_with_match_count),
+        ('pctbenchspmatch', pct_benchmarks_with_matches_and_speedup),
+        ('spmatchmin', speedup_with_matches_min),
+        ('spmatchmax', speedup_with_matches_max),
+        ('spnomatchmin', speedup_without_matches_min),
+        ('spnomatchmax', speedup_without_matches_max),
+        ('numslownomatch', slowdown_no_match_count),
+        ('pctslownomatch', pct_slowdown_no_matches),
+        ('minmatch', min_nonzero_matches),
+        ('minspminmatch', min_speedup_at_min_matches),
+        ('maxspeed', max_speedup),
+        ('topoptname', most_common_name),
+        ('topoptnum', most_common_count),
+        ('topopttotal', total_firings),
+        ('topoptpct', pct_most_common_optimization),
+        ('timerovhns', timer_overhead_ns),
+    ]
+    latex_macros_text = '\n'.join(
+        f'\\newcommand{{\\{backend_prefix}{name}}}{{{latex_macro_value(value)}}}'
+        for name, value in latex_macros
+    )
+    cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(
+        ratios,
+        args.backend_name,
+        'Empirical CDF of speedup',
+        'Baseline / Optimized',
+        'Speedup (Baseline / Optimized)',
+        line_color='#1f77b4',
+        line_style='-',
+    )
     cdf_svg_href = None
     if cdf_svg_text:
         assets_dir = args.output.parent / 'assets'
@@ -461,6 +873,63 @@ def main() -> None:
         )
     else:
         cdf_plot = cdf_png_html
+    cdf_total_png_html, cdf_total_svg_text = empirical_cdf_png_base64_logx(
+        total_ratios,
+        args.backend_name,
+        'Empirical CDF of total speedup',
+        'Baseline / (Optimized + OptTime)',
+        'Total speedup (Baseline / (Optimized + OptTime))',
+        line_color='#ff7f0e',
+        line_style='--',
+    )
+    cdf_total_svg_href = None
+    if cdf_total_svg_text:
+        assets_dir = args.output.parent / 'assets'
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        cdf_total_svg_path = assets_dir / 'speed_ratio_total_cdf.svg'
+        cdf_total_svg_path.write_text(cdf_total_svg_text, encoding='utf-8')
+        cdf_total_svg_href = f'./assets/{cdf_total_svg_path.name}'
+
+    if cdf_total_svg_href:
+        cdf_total_plot = (
+            cdf_total_png_html
+            + '<p style="margin-top:8px">'
+            + f'<a class="button" download="{html.escape(Path(cdf_total_svg_href).name)}" href="{html.escape(cdf_total_svg_href)}">'
+            + 'Download SVG</a>'
+            + '</p>'
+        )
+    else:
+        cdf_total_plot = cdf_total_png_html
+
+    cmd_counts = np.asarray([row[6] for row in s], dtype=float)
+    opt_times = np.asarray(
+        [
+            (row[3] if isinstance(row[3], (int, float)) else np.nan)
+            for row in s
+        ],
+        dtype=float,
+    )
+    opt_time_png_html, opt_time_svg_text = opt_time_vs_commands_png_base64(
+        cmd_counts, opt_times, args.backend_name
+    )
+    opt_time_svg_href = None
+    if opt_time_svg_text:
+        assets_dir = args.output.parent / 'assets'
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        opt_time_svg_path = assets_dir / 'opt_time_vs_commands.svg'
+        opt_time_svg_path.write_text(opt_time_svg_text, encoding='utf-8')
+        opt_time_svg_href = f'./assets/{opt_time_svg_path.name}'
+
+    if opt_time_svg_href:
+        opt_time_plot = (
+            opt_time_png_html
+            + '<p style="margin-top:8px">'
+            + f'<a class="button" download="{html.escape(Path(opt_time_svg_href).name)}" href="{html.escape(opt_time_svg_href)}">'
+            + 'Download SVG</a>'
+            + '</p>'
+        )
+    else:
+        opt_time_plot = opt_time_png_html
 
     html_output = f"""<!DOCTYPE html>
 <html>
@@ -503,6 +972,32 @@ table tr:hover {{
 .button:hover {{
     background: #e6e6e6;
 }}
+.stats-box {{
+    border: 1px solid #444;
+    background: #f8f8f8;
+    padding: 10px 12px;
+    margin: 12px 0 16px 0;
+}}
+.stats-box h2 {{
+    margin: 0 0 8px 0;
+    font-size: 18px;
+}}
+.stats-box ul {{
+    margin: 0;
+    padding-left: 22px;
+}}
+.stats-box h3 {{
+    margin: 10px 0 6px 0;
+    font-size: 14px;
+}}
+.latex-macros {{
+    width: 100%;
+    min-height: 220px;
+    box-sizing: border-box;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.4;
+}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/table-sort-js/table-sort.min.js"></script>
 </head>
@@ -511,12 +1006,33 @@ table tr:hover {{
 <p><strong>Benchmarks:</strong> <code>{benchmark_count}</code></p>
 <p><em>All time units are in ms</em></p>
 <p><em>Optbench timer overhead: {html.escape(overhead_display)} ns</em></p>
+<div class="stats-box">
+  <h2>Stats</h2>
+  <ul>
+    <li>Overall: speedups (&gt; 1.0) <code>{html.escape(speedup_gt_one_display)}</code>; slowdowns (&lt; 1.0) <code>{html.escape(slowdowns_display)}</code>.</li>
+    <li>Matched speedups: all benchmarks <code>{html.escape(benchmarks_with_matches_and_speedup_display)}</code>; among speedups <code>{html.escape(speedup_with_matches_fraction_display)}</code>.</li>
+    <li>Unmatched speedups (among speedups): <code>{html.escape(speedup_without_matches_fraction_display)}</code>.</li>
+    <li>Speedup ranges: matched <code>{html.escape(speedup_with_matches_range_display)}</code>; unmatched <code>{html.escape(speedup_without_matches_range_display)}</code>.</li>
+    <li>Slowdowns with no matches: <code>{html.escape(slowdown_no_matches_fraction_display)}</code>.</li>
+    <li>Matched-speedup floor: <code>{html.escape(min_speedup_for_min_nonzero_matches_display)}</code>.</li>
+    <li>Most common optimization: <code>{html.escape(most_common_optimization_display)}</code>.</li>
+    <li>Maximum speedup: <code>{html.escape(max_speedup_display)}</code>.</li>
+  </ul>
+  <h3>LaTeX Macros</h3>
+  <textarea class="latex-macros" readonly>{html.escape(latex_macros_text)}</textarea>
+</div>
 <table class="table-sort table-arrows remember-sort">
 {body_content}
 </table>
 <h2>Baseline vs Optimized Speed Ratios</h2>
 <p>Each benchmark contributes one point: <code>baseline_geomean / optimized_geomean</code>. Values &gt; 1 mean optimized is faster.</p>
 {cdf_plot}
+<h2>Baseline vs (Optimized + OptTime) Speed Ratios</h2>
+<p>Each benchmark contributes one point: <code>baseline_geomean / (optimized_geomean + opt_time_ms)</code>. Values &gt; 1 include optimization-time overhead and still beat baseline end-to-end.</p>
+{cdf_total_plot}
+<h2>OptTime vs Command Count</h2>
+<p>Each point is one benchmark: x-axis is command count from metadata, y-axis is optbench optimization time in ms.</p>
+{opt_time_plot}
 </body>
 </html>
 """

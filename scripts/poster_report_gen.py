@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--optbench-stats', type=Path, default=Path('report/optbench.json'))
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
+    parser.add_argument('--backend-name', type=str, default='ganesh-opengl')
     parser.add_argument('--skp-dir', type=Path, default=Path('skps'))
     parser.add_argument('--optimizer-stdout', type=Path, default=Path('out/Debug/optimizer_stdout'))
     return parser.parse_args()
@@ -63,7 +64,9 @@ def format_name(name: str) -> str:
     return name.replace('__', ' | ').replace('_', ' ')
 
 
-def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
+def empirical_cdf_png_base64_logx(
+    ratios: np.ndarray, backend_name: str
+) -> tuple[str, str | None]:
     ratios = np.asarray(ratios, dtype=float)
     ratios = ratios[np.isfinite(ratios) & (ratios > 0)]
     n = int(ratios.size)
@@ -74,9 +77,17 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
         import matplotlib
 
         matplotlib.use('Agg')
-        matplotlib.rcParams['font.family'] = 'sans-serif'
-        matplotlib.rcParams['font.sans-serif'] = ['Public Sans', 'DejaVu Sans', 'Arial']
-        matplotlib.rcParams['font.weight'] = 'semibold'
+        matplotlib.rcParams['font.family'] = 'serif'
+        matplotlib.rcParams['font.serif'] = [
+            'Linux Libertine O',
+            'Linux Libertine',
+            'DejaVu Serif',
+            'Times New Roman',
+            'Times',
+            'serif',
+        ]
+        matplotlib.rcParams['svg.fonttype'] = 'none'
+        matplotlib.rcParams['font.weight'] = 'normal'
         matplotlib.rcParams['axes.labelweight'] = 'bold'
         matplotlib.rcParams['axes.titleweight'] = 'bold'
         matplotlib.rcParams['font.size'] = 13
@@ -118,12 +129,19 @@ def empirical_cdf_png_base64_logx(ratios: np.ndarray) -> tuple[str, str | None]:
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(0.0, 1.0)
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    ax.set_xlabel('')
-    ax.set_ylabel('')
-    ax.set_title('Empirical CDF of speed ratios', loc='left', fontsize=15, fontweight='bold')
+    ax.set_xlabel('Speedup (Baseline / Optimized)')
+    ax.set_ylabel('Benchmarks at or below this speedup')
+    ax.set_title(
+        f'Empirical CDF of speedup (on {backend_name} backend, n={n})',
+        loc='center',
+        x=0.5,
+        ha='center',
+        fontsize=15,
+        fontweight='bold',
+    )
     ax.tick_params(axis='both', which='major', width=1.2)
     for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
-        tick_label.set_fontweight('semibold')
+        tick_label.set_fontweight('normal')
     for spine in ax.spines.values():
         spine.set_linewidth(1.2)
 
@@ -350,7 +368,7 @@ def main() -> None:
         overhead_display = f'{optbench_timer_overhead_ns:.2f}'
     else:
         overhead_display = 'n/a'
-    cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios)
+    cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(ratios, args.backend_name)
     cdf_svg_href = None
     if cdf_svg_text:
         assets_dir = args.output.parent / 'assets'

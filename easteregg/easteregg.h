@@ -151,6 +151,7 @@ private:
     mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
     mutable SkRecords::Is<SkRecords::Save> isSave;
     mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::Is<SkRecords::Concat44> isConcat44;
     mutable SkRecords::Is<SkRecords::ClipRect> isClipRect;
     mutable SkRecords::Is<SkRecords::DrawPath> isDrawPath;
     mutable SkRecords::IsSingleDraw isDraw;
