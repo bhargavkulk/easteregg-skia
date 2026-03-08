@@ -72,7 +72,9 @@ python scripts/run_all_skps.py \
        --samples 100 \
        --renderer out/Debug/renderer_opt \
        --render-tool renderer_opt \
-       --png-dir report/pngs
+       --png-dir report/pngs \
+       --backend grvk
+
 
 python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
@@ -80,4 +82,6 @@ python scripts/report_gen.py \
        --optbench-stats "report/optbench.json" \
        --output "report/index.html" \
        --skp-dir skps/ \
-       --optimizer-stdout out/Debug/optimizer_stdout
+       --optimizer-stdout out/Debug/optimizer_stdout \
+       --backend-name graphite-vulkan \
+       --backend grvk

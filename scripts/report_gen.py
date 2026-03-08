@@ -85,7 +85,7 @@ def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
         '-metric',
         'AE',
         '-fuzz',
-        '5%',  # adjust percentage as needed
+        '1%',  # adjust percentage as needed
         str(png1),
         str(png2),
         str(diff),
@@ -707,8 +707,7 @@ def main() -> None:
     if slowdown_count > 0:
         pct_slowdown_no_matches = 100.0 * slowdown_no_match_count / slowdown_count
         slowdown_no_matches_fraction_display = (
-            f'{slowdown_no_match_count}/{slowdown_count} '
-            f'({pct_slowdown_no_matches:.1f}%)'
+            f'{slowdown_no_match_count}/{slowdown_count} ({pct_slowdown_no_matches:.1f}%)'
         )
     else:
         pct_slowdown_no_matches = None
@@ -716,14 +715,14 @@ def main() -> None:
 
     speedup_rows = [row for row in s if (row[2] / row[1]) > 1.0]
     speedup_count = len(speedup_rows)
-    speedup_with_match_count = sum(1 for row in speedup_rows if isinstance(row[8], int) and row[8] > 0)
+    speedup_with_match_count = sum(
+        1 for row in speedup_rows if isinstance(row[8], int) and row[8] > 0
+    )
     speedup_without_match_count = sum(1 for row in speedup_rows if row[8] == 0)
     speedup_with_match_values = [
         (row[2] / row[1]) for row in speedup_rows if isinstance(row[8], int) and row[8] > 0
     ]
-    speedup_without_match_values = [
-        (row[2] / row[1]) for row in speedup_rows if row[8] == 0
-    ]
+    speedup_without_match_values = [(row[2] / row[1]) for row in speedup_rows if row[8] == 0]
     if benchmark_count > 0:
         pct_benchmarks_with_matches_and_speedup = 100.0 * speedup_with_match_count / benchmark_count
         benchmarks_with_matches_and_speedup_display = (
@@ -737,12 +736,10 @@ def main() -> None:
         pct_speedup_with_matches = 100.0 * speedup_with_match_count / speedup_count
         pct_speedup_without_matches = 100.0 * speedup_without_match_count / speedup_count
         speedup_with_matches_fraction_display = (
-            f'{speedup_with_match_count}/{speedup_count} '
-            f'({pct_speedup_with_matches:.1f}%)'
+            f'{speedup_with_match_count}/{speedup_count} ({pct_speedup_with_matches:.1f}%)'
         )
         speedup_without_matches_fraction_display = (
-            f'{speedup_without_match_count}/{speedup_count} '
-            f'({pct_speedup_without_matches:.1f}%)'
+            f'{speedup_without_match_count}/{speedup_count} ({pct_speedup_without_matches:.1f}%)'
         )
     else:
         pct_speedup_with_matches = None
@@ -776,7 +773,9 @@ def main() -> None:
     if non_slowdown_nonzero_match_rows:
         min_nonzero_matches = min(int(row[8]) for row in non_slowdown_nonzero_match_rows)
         min_speedup_at_min_matches = min(
-            (row[2] / row[1]) for row in non_slowdown_nonzero_match_rows if row[8] == min_nonzero_matches
+            (row[2] / row[1])
+            for row in non_slowdown_nonzero_match_rows
+            if row[8] == min_nonzero_matches
         )
         min_speedup_for_min_nonzero_matches_display = (
             f'matches={min_nonzero_matches}, min speedup={min_speedup_at_min_matches:.3f}x'
@@ -903,10 +902,7 @@ def main() -> None:
 
     cmd_counts = np.asarray([row[6] for row in s], dtype=float)
     opt_times = np.asarray(
-        [
-            (row[3] if isinstance(row[3], (int, float)) else np.nan)
-            for row in s
-        ],
+        [(row[3] if isinstance(row[3], (int, float)) else np.nan) for row in s],
         dtype=float,
     )
     opt_time_png_html, opt_time_svg_text = opt_time_vs_commands_png_base64(
