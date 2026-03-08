@@ -43,7 +43,7 @@ trap stop_xorg EXIT
 
 python3 tools/git-sync-deps
 
-./bin/gn gen out/Debug --args='cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
+./bin/gn gen out/Debug --args='skia_enable_graphite=true skia_use_vulkan=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
 ninja -C out/Debug optimizer nanobench "$RENDER_TOOL" skp_parser optimizer_stdout
 
 rm -rf opt report
