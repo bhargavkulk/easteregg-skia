@@ -44,7 +44,7 @@ trap stop_xorg EXIT
 python3 tools/git-sync-deps
 
 ./bin/gn gen out/Debug --args='skia_enable_graphite=true skia_use_vulkan=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
-ninja -C out/Debug optimizer nanobench "$RENDER_TOOL" skp_parser optimizer_stdout
+ninja -C out/Debug optimizer nanobench renderer_opt skp_parser optimizer_stdout
 
 rm -rf opt report
 mkdir opt
@@ -72,8 +72,8 @@ python scripts/run_all_skps.py \
        --samples 100 \
        --renderer out/Debug/renderer_opt \
        --render-tool renderer_opt \
-       --png-dir report/pngs \
-       --backend 8888
+       --png-dir report/pngs # \
+       # --backend 8888
 
 
 python scripts/report_gen.py \
@@ -82,6 +82,6 @@ python scripts/report_gen.py \
        --optbench-stats "report/optbench.json" \
        --output "report/index.html" \
        --skp-dir skps/ \
-       --optimizer-stdout out/Debug/optimizer_stdout \
-       --backend-name intelcpu \
-       --backend 8888
+       --optimizer-stdout out/Debug/optimizer_stdout #\
+       # --backend-name intelcpu \
+       # --backend 8888

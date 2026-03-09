@@ -433,6 +433,11 @@ void DstInToClip::transform(SkRecord* records) const {
                 continue;
             }
 
+            // Identity concat is a no-op, so it should not invalidate an in-progress match.
+            if (isConcat44.get()->matrix == SkM44()) {
+                continue;
+            }
+
             if (state_stack.back().state == MatchState::MatchDstIn ||
                 state_stack.back().state == MatchState::MatchDraw) {
                 state_stack.back().state = MatchState::Ignore;
