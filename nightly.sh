@@ -82,6 +82,6 @@ python scripts/report_gen.py \
        --optbench-stats "report/optbench.json" \
        --output "report/index.html" \
        --skp-dir skps/ \
-       --optimizer-stdout out/Debug/optimizer_stdout #\
+       --optimizer-stdout out/Debug/optimizer_stdout \
        --backend-name graphite-vulkan \
        --backend grvk
