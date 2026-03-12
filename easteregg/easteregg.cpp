@@ -152,6 +152,53 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
     }
 }
 
+void CopyRemoveOpaqueSaveLayer::operator()(SkRecord* records) const { transform(records); }
+
+void CopyRemoveOpaqueSaveLayer::transform(SkRecord* records) const {
+    state_stack.reset(0);
+    match_count = 0;
+    int saveCount = 0;
+    for (int i = 0; i < records->count(); i++) {
+        if (records->mutate(i, isSaveLayer)) {
+            if (!state_stack.empty() && state_stack.back().saveCount == saveCount) {
+                state_stack.back().state = MatchState::Ignore;
+            }
+            state_stack.push_back({
+                    isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
+                                                           : MatchState::Ignore,
+                    i,
+                    saveCount,
+            });
+        } else if (records->mutate(i, isSave)) {
+            saveCount += 1;
+        } else if (records->mutate(i, isDraw)) {
+            if (state_stack.empty() || state_stack.back().state == MatchState::Ignore) {
+                continue;
+            }
+            if (state_stack.back().saveCount < saveCount) {
+                continue;
+            }
+            if (!isPaintPlain(isDraw.get(), false)) {
+                state_stack.back().state = MatchState::Ignore;
+            }
+        } else if (records->mutate(i, isRestore)) {
+            if (state_stack.empty() || state_stack.back().saveCount < saveCount) {
+                SkASSERTF(saveCount > 0, "unbalanced restore at command %d", i);
+                saveCount -= 1;
+                continue;
+            }
+
+            auto state = state_stack.back();
+            state_stack.pop_back();
+
+            if (state.state == MatchState::Matching) {
+                records->replace<SkRecords::Save>(state.index);
+                match_count += 1;
+            }
+        }
+    }
+}
+
 void GradientDstInToMasks::transform(SkRecord* records) const {
     int saveCount = 0;
     match_count = 0;

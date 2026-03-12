@@ -174,8 +174,8 @@ int main(int argc, char** argv) {
         GradientDstInToMasks opt3;
         RemoveLoneLuma opt2;
         DstInToClip opt4;
-        // RemoveOpaqueSaveLayers opt1;
         NewRemoveOpaqueSaveLayers opt1;
+        // CopyRemoveOpaqueSaveLayer opt1;
 
         // Pass number mapping for --transform=easteregg:
         //   01 -> GradientDstInToMasks
