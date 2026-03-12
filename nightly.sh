@@ -73,7 +73,7 @@ python scripts/run_all_skps.py \
        --renderer out/Debug/renderer_opt \
        --render-tool renderer_opt \
        --png-dir report/pngs #\
-       # --backend grvk
+       --backend grvk
 
 python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
@@ -82,5 +82,5 @@ python scripts/report_gen.py \
        --output "report/index.html" \
        --skp-dir skps/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
-       --backend-name Ganesh/Intel #\
-       # --backend grvk
+       --backend-name Graphite/Vulkan \
+       --backend grvk
