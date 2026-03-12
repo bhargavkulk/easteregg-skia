@@ -342,10 +342,10 @@ def opt_time_vs_commands_png_base64(
         yfit = slope * xfit + intercept
         ax.plot(xfit, yfit, linewidth=1.8, color='#c00', linestyle='--')
 
-    ax.set_xlabel('# Commands in SKP')
-    ax.set_ylabel('OptTime (ms)')
+    ax.set_xlabel('No. of commands in SKP')
+    ax.set_ylabel('Optimization Time (ms)')
     ax.set_title(
-        f'OptTime vs command count\n(on {backend_name} backend, n={n})',
+        f'Optimization Time vs No. of commands in SKP\n(on {backend_name} backend, n={n})',
         loc='center',
         x=0.5,
         ha='center',
@@ -364,6 +364,82 @@ def opt_time_vs_commands_png_base64(
 
     img_html = (
         '<img alt="OptTime vs command count plot" style="max-width:100%;height:auto" '
+        f'src="data:image/png;base64,{img_b64}"/>'
+    )
+    return img_html, svg_text
+
+
+def baseline_vs_optimized_speed_xy_png_base64(
+    baseline_ms: np.ndarray, optimized_ms: np.ndarray, backend_name: str
+) -> tuple[str, str | None]:
+    base = np.asarray(baseline_ms, dtype=float)
+    opt = np.asarray(optimized_ms, dtype=float)
+    valid = np.isfinite(base) & np.isfinite(opt) & (base > 0) & (opt > 0)
+    base = base[valid]
+    opt = opt[valid]
+    n = int(base.size)
+    if n == 0:
+        return '<p>No baseline/optimized speed pairs to plot.</p>', None
+
+    try:
+        import matplotlib
+
+        matplotlib.use('Agg')
+        matplotlib.rcParams['font.family'] = 'serif'
+        matplotlib.rcParams['font.serif'] = [
+            'Linux Libertine O',
+            'Linux Libertine',
+            'DejaVu Serif',
+            'Times New Roman',
+            'Times',
+            'serif',
+        ]
+        matplotlib.rcParams['svg.fonttype'] = 'none'
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return '<p>matplotlib is not available; cannot render the speed-pair plot.</p>', None
+
+    x = base
+    y = opt
+
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    ax.scatter(x, y, s=14, alpha=0.8, color='#2a9d8f')
+
+    lo = float(min(np.min(x), np.min(y)))
+    hi = float(max(np.max(x), np.max(y)))
+    if lo == hi:
+        pad = 0.05 * lo if lo > 0 else 0.05
+        lo -= pad
+        hi += pad
+    ax.plot([lo, hi], [lo, hi], linewidth=1.5, color='#c00', linestyle='--')
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_xscale('log', base=2)
+    ax.set_yscale('log', base=2)
+    ax.set_aspect('equal', adjustable='box')
+
+    ax.set_xlabel('Baseline time (ms)')
+    ax.set_ylabel('Optimized time (ms)')
+    ax.set_title(
+        f'Baseline vs Optimized time pairs\n(on {backend_name} backend, n={n})',
+        loc='center',
+        x=0.5,
+        ha='center',
+        fontsize=10,
+    )
+
+    fig.tight_layout()
+    png_buf = io.BytesIO()
+    fig.savefig(png_buf, format='png', bbox_inches='tight')
+    svg_buf = io.BytesIO()
+    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
+    plt.close(fig)
+
+    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
+    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
+
+    img_html = (
+        '<img alt="Baseline vs optimized time pairs plot" style="max-width:100%;height:auto" '
         f'src="data:image/png;base64,{img_b64}"/>'
     )
     return img_html, svg_text
@@ -900,6 +976,30 @@ def main() -> None:
     else:
         cdf_total_plot = cdf_total_png_html
 
+    baseline_times = np.asarray([row[2] for row in s], dtype=float)
+    optimized_times = np.asarray([row[1] for row in s], dtype=float)
+    speed_pair_png_html, speed_pair_svg_text = baseline_vs_optimized_speed_xy_png_base64(
+        baseline_times, optimized_times, args.backend_name
+    )
+    speed_pair_svg_href = None
+    if speed_pair_svg_text:
+        assets_dir = args.output.parent / 'assets'
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        speed_pair_svg_path = assets_dir / 'baseline_vs_optimized_speed_xy.svg'
+        speed_pair_svg_path.write_text(speed_pair_svg_text, encoding='utf-8')
+        speed_pair_svg_href = f'./assets/{speed_pair_svg_path.name}'
+
+    if speed_pair_svg_href:
+        speed_pair_plot = (
+            speed_pair_png_html
+            + '<p style="margin-top:8px">'
+            + f'<a class="button" download="{html.escape(Path(speed_pair_svg_href).name)}" href="{html.escape(speed_pair_svg_href)}">'
+            + 'Download SVG</a>'
+            + '</p>'
+        )
+    else:
+        speed_pair_plot = speed_pair_png_html
+
     cmd_counts = np.asarray([row[6] for row in s], dtype=float)
     opt_times = np.asarray(
         [(row[3] if isinstance(row[3], (int, float)) else np.nan) for row in s],
@@ -1026,6 +1126,9 @@ table tr:hover {{
 <h2>Baseline vs (Optimized + OptTime) Speed Ratios</h2>
 <p>Each benchmark contributes one point: <code>baseline_geomean / (optimized_geomean + opt_time_ms)</code>. Values &gt; 1 include optimization-time overhead and still beat baseline end-to-end.</p>
 {cdf_total_plot}
+<h2>Baseline vs Optimized Time Pairs (XY)</h2>
+<p>Each benchmark contributes one point: x = baseline time (ms), y = optimized time (ms). Points below <code>y = x</code> indicate optimized is faster.</p>
+{speed_pair_plot}
 <h2>OptTime vs Command Count</h2>
 <p>Each point is one benchmark: x-axis is command count from metadata, y-axis is optbench optimization time in ms.</p>
 {opt_time_plot}

@@ -85,6 +85,7 @@ def run_nanobench(
         *map(str, skp_paths),
         '--config',
         backend,
+        '--purgeBetweenBenches',
     ]
     if clip:
         cmd.extend(['--clip', clip])
@@ -195,7 +196,9 @@ def main():
         ee_png: Path = args.png_dir / f'{stem}__ee.png'
         if args.render_tool == 'renderer_opt':
             run_renderer(args.renderer, skp, bl_png, args.render_tool, opt=False, transform='none')
-            run_renderer(args.renderer, skp, ee_png, args.render_tool, opt=True, transform='easteregg')
+            run_renderer(
+                args.renderer, skp, ee_png, args.render_tool, opt=True, transform='easteregg'
+            )
         else:
             run_renderer(args.renderer, none_output, bl_png, args.render_tool)
             run_renderer(args.renderer, ee_output, ee_png, args.render_tool)

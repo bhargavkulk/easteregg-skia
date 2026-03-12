@@ -20,16 +20,16 @@ mkdir report
 
 cp -r old_jsons report/jsons
 
-./out/Debug/optbench --skps skps200/*.skp --stats "report/optbench.json"
+./out/Debug/optbench --skps old_bench/*.skp --stats "report/optbench.json"
 
 uv run python scripts/run_all_skps.py \
-       --skp-dir skps200/ \
+       --skp-dir old_bench/ \
        --optimizer out/Debug/optimizer \
        --nanobench out/Debug/nanobench \
        --opt-dir opt \
        --report-dir "report" \
        --nanobench-dir "report/nanobench" \
-       --json-dir jsons200/ \
+       --json-dir old_jsons/ \
        --samples 100 \
        --renderer out/Debug/renderer_opt \
        --render-tool renderer_opt \
@@ -38,10 +38,10 @@ uv run python scripts/run_all_skps.py \
 
 uv run python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
-       --json-dir jsons200/ \
+       --json-dir old_jsons/ \
        --optbench-stats "report/optbench.json" \
        --output "report/index.html" \
-       --skp-dir skps200/ \
+       --skp-dir old_bench/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
        --backend-name graphite-metal \
        --backend grmtl
