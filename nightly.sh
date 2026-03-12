@@ -75,7 +75,7 @@ python scripts/run_all_skps.py \
        --png-dir report/pngs #\
        # --backend grvk
 
-python scripts/altair_report_gen.py \
+python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
        --json-dir jsons \
        --optbench-stats "report/optbench.json" \
