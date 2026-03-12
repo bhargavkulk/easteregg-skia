@@ -111,7 +111,8 @@ int main(int argc, char** argv) {
 
     const std::string transform = FLAGS_transform[0];
 
-    RemoveOpaqueSaveLayers opt1;
+    // RemoveOpaqueSaveLayers opt1;
+    NewRemoveOpaqueSaveLayers opt1;
     RemoveLoneLuma opt2;
     GradientDstInToMasks opt3;
     DstInToClip opt4;

@@ -174,13 +174,14 @@ int main(int argc, char** argv) {
         GradientDstInToMasks opt3;
         RemoveLoneLuma opt2;
         DstInToClip opt4;
-        RemoveOpaqueSaveLayers opt1;
+        // RemoveOpaqueSaveLayers opt1;
+        NewRemoveOpaqueSaveLayers opt1;
 
         // Pass number mapping for --transform=easteregg:
         //   01 -> GradientDstInToMasks
         //   02 -> RemoveLoneLuma
         //   03 -> DstInToClip
-        //   04 -> RemoveOpaqueSaveLayers
+        //   04 -> NewRemoveOpaqueSaveLayers
         opt3.transform(&records);
         if (!DumpPass(records, bounds, outputDir, outputBase, passIndex++)) {
             return 1;

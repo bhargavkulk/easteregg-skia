@@ -36,7 +36,7 @@ uv run python scripts/run_all_skps.py \
        --png-dir report/pngs \
        --backend grmtl
 
-uv run python scripts/altair_report_gen.py \
+uv run python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
        --json-dir old_jsons/ \
        --optbench-stats "report/optbench.json" \

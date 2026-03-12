@@ -76,7 +76,8 @@ static sk_sp<SkPicture> MaybeOptimize(sk_sp<SkPicture> picture, const std::strin
     SkRecordCanvas recorder(&records, bounds);
     picture->playback(&recorder);
 
-    RemoveOpaqueSaveLayers opt1;
+    // RemoveOpaqueSaveLayers opt1;
+    NewRemoveOpaqueSaveLayers opt1;
     RemoveLoneLuma opt2;
     GradientDstInToMasks opt3;
     DstInToClip opt4;

@@ -158,4 +158,106 @@ private:
     mutable int match_count = 0;
 };
 
+template <typename Derived, typename State> class SkOptPass {
+protected:
+    struct Frame {
+        int saveDepthAtOpen;
+    };
+    mutable skia_private::STArray<8, Frame> frames;
+    mutable skia_private::STArray<8, State> states;
+    mutable int saveDepth = 0;
+
+    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
+    mutable SkRecords::Is<SkRecords::Save> isSave;
+    mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::IsSingleDraw isDraw;
+
+public:
+    void run(SkRecord* r) const {
+        frames.reset(0);
+        states.reset(0);
+        saveDepth = 0;
+        auto& self = *static_cast<const Derived*>(this);
+
+        for (int i = 0; i < r->count(); ++i) {
+            if (r->mutate(i, isSaveLayer)) {
+                State* parent = states.empty() ? nullptr : &states.back();
+                frames.push_back({saveDepth});
+                states.push_back(State{});  // default only
+                self.onSaveLayer(r, i, isSaveLayer.get(), saveDepth, &states.back(), parent);
+            } else if (r->mutate(i, isSave)) {
+                ++saveDepth;
+                self.onSave(r, i, saveDepth, states.empty() ? nullptr : &states.back());
+            } else if (r->mutate(i, isRestore)) {
+                const bool closesLayer =
+                        !frames.empty() && frames.back().saveDepthAtOpen == saveDepth;
+                self.onRestore(
+                        r, i, saveDepth, states.empty() ? nullptr : &states.back(), closesLayer);
+                if (closesLayer) {
+                    frames.pop_back();
+                    states.pop_back();
+                } else if (saveDepth > 0) {
+                    --saveDepth;
+                }
+            } else if (r->mutate(i, isDraw)) {
+                self.onDraw(r, i, saveDepth, isDraw.get(), states.empty() ? nullptr : &states.back());
+            } else {
+                self.onOther(r, i, saveDepth, states.empty() ? nullptr : &states.back());
+            }
+        }
+    }
+};
+
+struct NewRemoveOpaqueSaveLayersState {
+    enum class Phase { Matching, Ignore };
+    Phase phase = Phase::Ignore;
+    int layerIndex = -1;
+    int saveDepthAtOpen = 0;
+};
+
+struct NewRemoveOpaqueSaveLayers
+        : SkOptPass<NewRemoveOpaqueSaveLayers, NewRemoveOpaqueSaveLayersState> {
+    using State = NewRemoveOpaqueSaveLayersState;
+    using Phase = NewRemoveOpaqueSaveLayersState::Phase;
+    void transform(SkRecord* records) const {
+        match_count = 0;
+        this->run(records);
+    }
+    void operator()(SkRecord* records) const { this->transform(records); }
+    int matchCount() const { return match_count; }
+
+    void onSaveLayer(
+            SkRecord*, int i, const SkRecords::SaveLayer* sl, int saveDepth, State* cur,
+            State* parent) const {
+        // Match old pass behavior: a nested SaveLayer invalidates the parent only when it is at
+        // the same save depth (i.e. not hidden behind an intervening Save..Restore scope).
+        if (parent && parent->saveDepthAtOpen == saveDepth) {
+            parent->phase = Phase::Ignore;
+        }
+        cur->phase = isPaintPlain(sl->paint) ? Phase::Matching : Phase::Ignore;
+        cur->layerIndex = i;
+        cur->saveDepthAtOpen = saveDepth;
+    }
+
+    void onSave(SkRecord*, int, int, State*) const {}
+
+    void onDraw(SkRecord*, int, int saveDepth, SkPaint* p, State* cur) const {
+        if (cur && saveDepth > cur->saveDepthAtOpen) {
+            return;
+        }
+        if (cur && cur->phase == Phase::Matching && !isPaintPlain(p, false))
+            cur->phase = Phase::Ignore;
+    }
+    void onRestore(SkRecord* r, int, int, State* cur, bool closesLayer) const {
+        if (closesLayer && cur && cur->phase == Phase::Matching) {
+            r->replace<SkRecords::Save>(cur->layerIndex);
+            match_count += 1;
+        }
+    }
+    void onOther(SkRecord*, int, int, State*) const {}
+
+private:
+    mutable int match_count = 0;
+};
+
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_
