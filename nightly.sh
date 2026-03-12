@@ -75,7 +75,6 @@ python scripts/run_all_skps.py \
        --png-dir report/pngs \
        --backend grvk
 
-
 python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
        --json-dir jsons \
@@ -83,5 +82,5 @@ python scripts/report_gen.py \
        --output "report/index.html" \
        --skp-dir skps/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
-       --backend-name graphite-vulkan \
+       --backend-name Graphite/Vulkan \
        --backend grvk

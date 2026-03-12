@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
 FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
 
 
-def backend_macro_prefix(backend_name: str, backend: str) -> str:
+def backend_macro_prefix(backend: str) -> str:
     token_map = {
         'graphite': 'gr',
         'ganesh': 'ga',
@@ -45,9 +45,7 @@ def backend_macro_prefix(backend_name: str, backend: str) -> str:
         'dawn': 'dawn',
         'angle': 'angle',
     }
-    tokens = [t for t in re.split(r'[^a-z0-9]+', backend_name.lower()) if t]
-    if not tokens:
-        tokens = [t for t in re.split(r'[^a-z0-9]+', backend.lower()) if t]
+    tokens = [t for t in re.split(r'[^a-z0-9]+', backend.lower()) if t]
     prefix = ''.join(token_map.get(t, t[:3]) for t in tokens)
     if not prefix:
         prefix = 'backend'
@@ -761,7 +759,7 @@ def main() -> None:
         ],
         dtype=float,
     )
-    backend_prefix = backend_macro_prefix(args.backend_name, args.backend)
+    backend_prefix = backend_macro_prefix(args.backend)
     if ratios.size > 0:
         pct_speedup_gt_one = 100.0 * float(np.mean(ratios > 1.0))
         speedup_gt_one_display = f'{pct_speedup_gt_one:.1f}%'
