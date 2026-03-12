@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "matplotlib>=3.10.8",
+    "altair[save]>=6.0.0",
     "playwright>=1.57.0",
     "pyrefly>=0.47.0",
     "scipy>=1.16.3",

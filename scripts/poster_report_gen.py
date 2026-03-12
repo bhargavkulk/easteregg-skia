@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
 
 
 FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
+PLOT_DPI = 320
 
 
 def run_compare(png1: Path, png2: Path, diff: Path) -> float | None:
@@ -86,7 +87,7 @@ def empirical_cdf_png_base64_logx(
             'Times',
             'serif',
         ]
-        matplotlib.rcParams['svg.fonttype'] = 'none'
+        matplotlib.rcParams['svg.fonttype'] = 'path'
         matplotlib.rcParams['font.weight'] = 'normal'
         matplotlib.rcParams['axes.labelweight'] = 'bold'
         matplotlib.rcParams['axes.titleweight'] = 'bold'
@@ -123,7 +124,7 @@ def empirical_cdf_png_base64_logx(
     x_min -= pad
     x_max += pad
 
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
     ax.step(ratios, y, where='post', linewidth=2.4, color='#5e81ac')
     ax.axvline(1.0, color='#bf616a', linewidth=1.8, linestyle='--')
     ax.set_xlim(x_min, x_max)
@@ -132,7 +133,7 @@ def empirical_cdf_png_base64_logx(
     ax.set_xlabel('Speedup (Baseline / Optimized)')
     ax.set_ylabel('Benchmarks at or below this speedup')
     ax.set_title(
-        f'Empirical CDF of speedup (on {backend_name} backend, n={n})',
+        f'Empirical CDF of speedup (on {backend_name}, n={n})',
         loc='center',
         x=0.5,
         ha='center',
@@ -147,7 +148,7 @@ def empirical_cdf_png_base64_logx(
 
     fig.tight_layout()
     png_buf = io.BytesIO()
-    fig.savefig(png_buf, format='png', bbox_inches='tight')
+    fig.savefig(png_buf, format='png', dpi=PLOT_DPI, bbox_inches='tight')
     svg_buf = io.BytesIO()
     fig.savefig(svg_buf, format='svg', bbox_inches='tight')
     plt.close(fig)
@@ -187,7 +188,7 @@ def baseline_vs_optimized_speed_xy_png_base64(
             'Times',
             'serif',
         ]
-        matplotlib.rcParams['svg.fonttype'] = 'none'
+        matplotlib.rcParams['svg.fonttype'] = 'path'
         import matplotlib.pyplot as plt
     except ImportError:
         return '<p>matplotlib is not available; cannot render the speed-pair plot.</p>', None
@@ -195,7 +196,7 @@ def baseline_vs_optimized_speed_xy_png_base64(
     x = base
     y = opt
 
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
     ax.scatter(x, y, s=14, alpha=0.8, color='#2a9d8f')
 
     lo = float(min(np.min(x), np.min(y)))
@@ -214,7 +215,7 @@ def baseline_vs_optimized_speed_xy_png_base64(
     ax.set_xlabel('Baseline time (ms)')
     ax.set_ylabel('Optimized time (ms)')
     ax.set_title(
-        f'Baseline vs Optimized time pairs (on {backend_name} backend, n={n})',
+        f'Baseline vs Optimized time pairs (on {backend_name}, n={n})',
         loc='center',
         x=0.5,
         ha='center',
@@ -223,7 +224,7 @@ def baseline_vs_optimized_speed_xy_png_base64(
     )
     fig.tight_layout()
     png_buf = io.BytesIO()
-    fig.savefig(png_buf, format='png', bbox_inches='tight')
+    fig.savefig(png_buf, format='png', dpi=PLOT_DPI, bbox_inches='tight')
     svg_buf = io.BytesIO()
     fig.savefig(svg_buf, format='svg', bbox_inches='tight')
     plt.close(fig)
