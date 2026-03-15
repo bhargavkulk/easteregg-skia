@@ -272,8 +272,9 @@ def empirical_cdf_png_base64_logx(
         color=line_color,
         linestyle=line_style,
         label=f'{line_label} (n={n})',
+        zorder=3,
     )
-    ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--')
+    ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--', zorder=1)
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(0.0, 1.0)
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
@@ -345,7 +346,7 @@ def opt_time_vs_commands_png_base64(
     ax.set_xlabel('No. of commands in SKP')
     ax.set_ylabel('Optimization Time (ms)')
     ax.set_title(
-        f'Optimization Time vs No. of commands in SKP\n(on {backend_name}, n={n})',
+        f'Optimization Time vs Program Size\n(on {backend_name}, n={n})',
         loc='center',
         x=0.5,
         ha='center',
@@ -403,7 +404,7 @@ def baseline_vs_optimized_speed_xy_png_base64(
     y = opt
 
     fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
-    ax.scatter(x, y, s=14, alpha=0.8, color='#2a9d8f')
+    ax.scatter(x, y, s=14, alpha=0.8, color='#1f77b4', zorder=3)
 
     lo = float(min(np.min(x), np.min(y)))
     hi = float(max(np.max(x), np.max(y)))
@@ -411,7 +412,21 @@ def baseline_vs_optimized_speed_xy_png_base64(
         pad = 0.05 * lo if lo > 0 else 0.05
         lo -= pad
         hi += pad
-    ax.plot([lo, hi], [lo, hi], linewidth=1.5, color='#c00', linestyle='--')
+    ax.plot([lo, hi], [lo, hi], linewidth=1.5, color='#c00', linestyle='--', zorder=1)
+
+    # Constant-factor speedup guide: y = x / 2 (optimized is 2x faster than baseline).
+    x_half_start = max(lo, 2.0 * lo)
+    x_half_end = hi
+    if x_half_start <= x_half_end:
+        ax.plot(
+            [x_half_start, x_half_end],
+            [x_half_start / 2.0, x_half_end / 2.0],
+            linewidth=1.3,
+            color='#808080',
+            linestyle='--',
+            zorder=1,
+        )
+
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
     ax.set_xscale('log', base=2)
@@ -917,8 +932,37 @@ def main() -> None:
         ('topoptpct', pct_most_common_optimization),
         ('timerovhns', timer_overhead_ns),
     ]
+    speedup_macro_names = {
+        'spmatchmin',
+        'spmatchmax',
+        'spnomatchmin',
+        'spnomatchmax',
+        'minspminmatch',
+        'maxspeed',
+    }
+    percentage_macro_names = {
+        'pctspeed',
+        'pctslow',
+        'pctspmatch',
+        'pctspnomatch',
+        'pctbenchspmatch',
+        'pctslownomatch',
+        'topoptpct',
+    }
+
+    def latex_macro_suffix(name: str, value: object) -> str:
+        if value is None:
+            return ''
+        suffix = ''
+        if name in speedup_macro_names:
+            suffix += r'\texttimes'
+        if name in percentage_macro_names:
+            suffix += r'\%'
+        return suffix
+
     latex_macros_text = '\n'.join(
-        f'\\newcommand{{\\{backend_prefix}{name}}}{{{latex_macro_value(value)}}}'
+        f'\\newcommand{{\\{backend_prefix}{name}}}'
+        f'{{\\fillin{{{latex_macro_value(value)}{latex_macro_suffix(name, value)}}}\\xspace}}'
         for name, value in latex_macros
     )
     cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(
@@ -953,7 +997,7 @@ def main() -> None:
         args.backend_name,
         'Empirical CDF of total speedup',
         'Baseline / (Optimized + OptTime)',
-        'Total speedup (Baseline / (Optimized + OptTime))',
+        'Total speedup (Baseline / (Optimized + Optimization Time))',
         line_color='#1f77b4',
         line_style='-',
     )
