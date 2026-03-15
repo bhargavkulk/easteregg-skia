@@ -234,16 +234,6 @@ def empirical_cdf_png_base64_logx(
         import matplotlib
 
         matplotlib.use('Agg')
-        matplotlib.rcParams['font.family'] = 'serif'
-        matplotlib.rcParams['font.serif'] = [
-            'Linux Libertine O',
-            'Linux Libertine',
-            'DejaVu Serif',
-            'Times New Roman',
-            'Times',
-            'serif',
-        ]
-        matplotlib.rcParams['svg.fonttype'] = 'path'
         import matplotlib.pyplot as plt
         from matplotlib.ticker import PercentFormatter
     except ImportError:
@@ -320,16 +310,6 @@ def opt_time_vs_commands_png_base64(
         import matplotlib
 
         matplotlib.use('Agg')
-        matplotlib.rcParams['font.family'] = 'serif'
-        matplotlib.rcParams['font.serif'] = [
-            'Linux Libertine O',
-            'Linux Libertine',
-            'DejaVu Serif',
-            'Times New Roman',
-            'Times',
-            'serif',
-        ]
-        matplotlib.rcParams['svg.fonttype'] = 'path'
         import matplotlib.pyplot as plt
     except ImportError:
         return '<p>matplotlib is not available; cannot render the opt-time plot.</p>', None
@@ -386,16 +366,6 @@ def baseline_vs_optimized_speed_xy_png_base64(
         import matplotlib
 
         matplotlib.use('Agg')
-        matplotlib.rcParams['font.family'] = 'serif'
-        matplotlib.rcParams['font.serif'] = [
-            'Linux Libertine O',
-            'Linux Libertine',
-            'DejaVu Serif',
-            'Times New Roman',
-            'Times',
-            'serif',
-        ]
-        matplotlib.rcParams['svg.fonttype'] = 'path'
         import matplotlib.pyplot as plt
     except ImportError:
         return '<p>matplotlib is not available; cannot render the speed-pair plot.</p>', None
@@ -970,7 +940,7 @@ def main() -> None:
         args.backend_name,
         'Empirical CDF of speedup',
         'Baseline / Optimized',
-        'Speedup (Baseline / Optimized)',
+        'Baseline / Optimized',
         line_color='#1f77b4',
         line_style='-',
     )
@@ -997,7 +967,7 @@ def main() -> None:
         args.backend_name,
         'Empirical CDF of total speedup',
         'Baseline / (Optimized + OptTime)',
-        'Total speedup (Baseline / (Optimized + Optimization Time))',
+        'Baseline / (Optimized + Optimization Time)',
         line_color='#1f77b4',
         line_style='-',
     )
