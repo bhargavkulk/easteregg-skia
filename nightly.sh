@@ -83,4 +83,5 @@ python scripts/report_gen.py \
        --skp-dir skps/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
        --backend-name Graphite/Vulkan \
-       --backend grvk
+       --backend grvk \
+       --latex-prefix grvk

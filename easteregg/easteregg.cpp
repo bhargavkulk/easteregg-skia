@@ -23,6 +23,18 @@ bool isPaintPlain(SkPaint* paint, bool testForOpaque) {
     return (testForOpaque ? paint->getAlphaf() == 1.0f : true) && paint->isSrcOver();
 }
 
+bool isPaintPlainDraw(SkPaint* paint) {
+    if (!paint) {
+        return true;
+    }
+
+    if (paint->getColorFilter() || paint->getImageFilter() || paint->getMaskFilter()) {
+        return false;
+    }
+
+    return paint->isSrcOver();
+}
+
 bool isPaintLumaMask(SkPaint* paint, float a, float r, float g, float b) {
     if (!paint) {
         return true;
@@ -146,53 +158,6 @@ void RemoveOpaqueSaveLayers::transform(SkRecord* records) const {
 
             if (state == MatchState::Matching) {
                 records->replace<SkRecords::Save>(index);
-                match_count += 1;
-            }
-        }
-    }
-}
-
-void CopyRemoveOpaqueSaveLayer::operator()(SkRecord* records) const { transform(records); }
-
-void CopyRemoveOpaqueSaveLayer::transform(SkRecord* records) const {
-    state_stack.reset(0);
-    match_count = 0;
-    int saveCount = 0;
-    for (int i = 0; i < records->count(); i++) {
-        if (records->mutate(i, isSaveLayer)) {
-            if (!state_stack.empty() && state_stack.back().saveCount == saveCount) {
-                state_stack.back().state = MatchState::Ignore;
-            }
-            state_stack.push_back({
-                    isPaintPlain(isSaveLayer.get()->paint) ? MatchState::Matching
-                                                           : MatchState::Ignore,
-                    i,
-                    saveCount,
-            });
-        } else if (records->mutate(i, isSave)) {
-            saveCount += 1;
-        } else if (records->mutate(i, isDraw)) {
-            if (state_stack.empty() || state_stack.back().state == MatchState::Ignore) {
-                continue;
-            }
-            if (state_stack.back().saveCount < saveCount) {
-                continue;
-            }
-            if (!isPaintPlain(isDraw.get(), false)) {
-                state_stack.back().state = MatchState::Ignore;
-            }
-        } else if (records->mutate(i, isRestore)) {
-            if (state_stack.empty() || state_stack.back().saveCount < saveCount) {
-                SkASSERTF(saveCount > 0, "unbalanced restore at command %d", i);
-                saveCount -= 1;
-                continue;
-            }
-
-            auto state = state_stack.back();
-            state_stack.pop_back();
-
-            if (state.state == MatchState::Matching) {
-                records->replace<SkRecords::Save>(state.index);
                 match_count += 1;
             }
         }
@@ -596,3 +561,41 @@ void DstInToClip::transform(SkRecord* records) const {
 
     records->executeInsertions();
 }
+
+RemoveOpaqueSaveLayerPass::MatchState RemoveOpaqueSaveLayerPass::onSaveLayer(
+        SkRecord* records, int index, SkRecords::Is<SkRecords::SaveLayer> saveLayerMatch) const {
+    if (!frames.empty()) frames.back().match_state.kind = MatchState::Ignore;
+
+    MatchState state;
+    state.save_layer_index = index;
+    if (isPaintPlain(isSaveLayer.get()->paint)) {
+        state.kind = MatchState::Matching;
+    } else {
+        state.kind = MatchState::Ignore;
+    }
+    return state;
+}
+
+void RemoveOpaqueSaveLayerPass::onSave(SkRecord* records, int index) const { return; }
+
+void RemoveOpaqueSaveLayerPass::onRestore(SkRecord* records, int index) const {
+    MatchState state = frames.back().match_state;
+    if (state.kind == MatchState::Matching) {
+        records->replace<SkRecords::Save>(state.save_layer_index);
+        match_count += 1;
+    }
+}
+
+void RemoveOpaqueSaveLayerPass::onDraw(SkRecord* records,
+                                       int index,
+                                       SkRecords::IsSingleDraw& drawMatch) const {
+    if (frames.empty() || frames.back().match_state.kind == MatchState::Ignore) {
+        return;
+    }
+
+    if (!isPaintPlainDraw(isDraw.get())) {
+        frames.back().match_state.kind = MatchState::Ignore;
+    }
+}
+
+void RemoveOpaqueSaveLayerPass::onOther(SkRecord* records, int index) const { return; }

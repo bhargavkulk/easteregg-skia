@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
     parser.add_argument('--backend-name', type=str, default='ganesh-opengl')
+    parser.add_argument('--latex-prefix', type=str, default=None)
     parser.add_argument('--skp-dir', type=Path, default=Path('skps'))
     parser.add_argument('--optimizer-stdout', type=Path, default=Path('out/Debug/optimizer_stdout'))
     return parser.parse_args()
@@ -760,7 +761,7 @@ def main() -> None:
         ],
         dtype=float,
     )
-    backend_prefix = backend_macro_prefix(args.backend)
+    backend_prefix = args.latex_prefix if args.latex_prefix is not None else backend_macro_prefix(args.backend)
     if ratios.size > 0:
         pct_speedup_gt_one = 100.0 * float(np.mean(ratios > 1.0))
         speedup_gt_one_display = f'{pct_speedup_gt_one:.1f}%'
@@ -1125,7 +1126,7 @@ table tr:hover {{
 <h2>Baseline vs (Optimized + OptTime) Speed Ratios</h2>
 <p>Each benchmark contributes one point: <code>baseline_geomean / (optimized_geomean + opt_time_ms)</code>. Values &gt; 1 include optimization-time overhead and still beat baseline end-to-end.</p>
 {cdf_total_plot}
-<h2>Baseline vs Optimized Time Pairs (XY)</h2>
+<h2>Baseline vs Optimized Time</h2>
 <p>Each benchmark contributes one point: x = baseline time (ms), y = optimized time (ms). Points below <code>y = x</code> indicate optimized is faster.</p>
 {speed_pair_plot}
 <h2>OptTime vs Command Count</h2>

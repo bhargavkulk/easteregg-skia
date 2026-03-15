@@ -100,7 +100,7 @@ double time(int loops, const sk_sp<SkPicture>& picture) {
         picture->playback(&recorder);
     }
 
-    NewRemoveOpaqueSaveLayers opt1;
+    RemoveOpaqueSaveLayerPass opt1;
     // CopyRemoveOpaqueSaveLayer opt1;
     RemoveLoneLuma opt2;
     GradientDstInToMasks opt3;

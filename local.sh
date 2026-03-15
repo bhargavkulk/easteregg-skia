@@ -44,4 +44,5 @@ uv run python scripts/report_gen.py \
        --skp-dir old_bench/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
        --backend-name Graphite/Metal \
-       --backend grmtl
+       --backend grmtl \
+       --latex-prefix grmtl

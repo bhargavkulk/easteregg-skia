@@ -29,29 +29,6 @@ private:
     mutable int match_count = 0;
 };
 
-struct CopyRemoveOpaqueSaveLayer {
-    void operator()(SkRecord* records) const;
-    void transform(SkRecord* records) const;
-    int matchCount() const { return match_count; }
-
-private:
-    struct MatchState {
-        enum {
-            Matching,
-            Ignore,
-        } state;
-        int index;
-        int saveCount;
-    };
-    mutable skia_private::STArray<8, MatchState> state_stack;
-
-    mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
-    mutable SkRecords::Is<SkRecords::Save> isSave;
-    mutable SkRecords::Is<SkRecords::Restore> isRestore;
-    mutable SkRecords::IsSingleDraw isDraw;
-    mutable int match_count = 0;
-};
-
 // * λskia
 // (rewrite (SaveLayer (Draw (Empty) shape (Paint (Color a r g b) (SrcOver) style (IdFilter) i1) clip transform')
 //                     (Draw (Empty) shape (Paint (LinearGradient true) (SrcOver) style (IdFilter) i2) clip transform)
@@ -181,113 +158,97 @@ private:
     mutable int match_count = 0;
 };
 
-template <typename Derived, typename State> class SkOptPass {
-protected:
+template <typename MatchState> struct SkOptPass {
     struct Frame {
-        int layerIndex;
-        int saveCountAtOpen;
+        MatchState match_state;
+        int save_count;
     };
-    mutable skia_private::STArray<8, Frame> frame_stack;
-    mutable skia_private::STArray<8, State> state_stack;
-    mutable int save_count = 0;
+
+    virtual ~SkOptPass() = default;
+
+    mutable skia_private::STArray<8, Frame> frames;
 
     mutable SkRecords::Is<SkRecords::SaveLayer> isSaveLayer;
     mutable SkRecords::Is<SkRecords::Save> isSave;
     mutable SkRecords::Is<SkRecords::Restore> isRestore;
+    mutable SkRecords::Is<SkRecords::Concat44> isConcat44;
+    mutable SkRecords::Is<SkRecords::ClipRect> isClipRect;
+    mutable SkRecords::Is<SkRecords::DrawPath> isDrawPath;
     mutable SkRecords::IsSingleDraw isDraw;
+    mutable int match_count = 0;
 
-public:
-    void run(SkRecord* r) const {
-        frame_stack.reset(0);
-        state_stack.reset(0);
-        save_count = 0;
-        auto& self = *static_cast<const Derived*>(this);
-
-        for (int i = 0; i < r->count(); ++i) {
-            if (r->mutate(i, isSaveLayer)) {
-                frame_stack.push_back({i, save_count});
-                state_stack.push_back(State{});  // default only
-                self.onSaveLayer(
-                        r, i, isSaveLayer.get(), &state_stack.back(),
-                        state_stack.size() >= 2 ? &state_stack[state_stack.size() - 2] : nullptr,
-                        &frame_stack.back());
-            } else if (r->mutate(i, isSave)) {
-                save_count += 1;
-                self.onSave(r, i, state_stack.empty() ? nullptr : &state_stack.back());
-            } else if (r->mutate(i, isRestore)) {
-                if (frame_stack.empty() || frame_stack.back().saveCountAtOpen < save_count) {
-                    SkASSERTF(save_count > 0, "unbalanced restore at command %d", i);
-                    save_count -= 1;
-                    self.onRestoreNormal(r, i, state_stack.empty() ? nullptr : &state_stack.back());
-                    continue;
-                }
-
-                self.onRestoreLayer(r, i, &state_stack.back(), &frame_stack.back());
-                frame_stack.pop_back();
-                state_stack.pop_back();
-            } else if (r->mutate(i, isDraw)) {
-                if (state_stack.empty()) {
-                    continue;
-                }
-                if (frame_stack.back().saveCountAtOpen < save_count) {
-                    self.onDraw(r, i, isDraw.get(), &state_stack.back(), true);
-                } else {
-                    self.onDraw(r, i, isDraw.get(), &state_stack.back(), false);
-                }
-            } else {
-                self.onOther(r, i, state_stack.empty() ? nullptr : &state_stack.back());
-            }
-        }
-    }
-};
-
-struct NewRemoveOpaqueSaveLayersState {
-    enum class Phase { Matching, Ignore };
-    Phase phase = Phase::Ignore;
-};
-
-struct NewRemoveOpaqueSaveLayers
-        : SkOptPass<NewRemoveOpaqueSaveLayers, NewRemoveOpaqueSaveLayersState> {
-    using Base = SkOptPass<NewRemoveOpaqueSaveLayers, NewRemoveOpaqueSaveLayersState>;
-    using State = NewRemoveOpaqueSaveLayersState;
-    using Phase = NewRemoveOpaqueSaveLayersState::Phase;
-    using Frame = Base::Frame;
-    void transform(SkRecord* records) const {
-        match_count = 0;
-        this->run(records);
-    }
-    void operator()(SkRecord* records) const { this->transform(records); }
+    void transform(SkRecord* records) const;
+    void operator()(SkRecord* records) const { transform(records); }
     int matchCount() const { return match_count; }
 
-    void onSaveLayer(
-            SkRecord*, int, const SkRecords::SaveLayer* sl, State* cur, State* parent,
-            const Frame*) const {
-        if (parent) {
-            parent->phase = Phase::Ignore;
-        }
-        cur->phase = isPaintPlain(sl->paint) ? Phase::Matching : Phase::Ignore;
-    }
+    virtual MatchState onSaveLayer(SkRecord* records,
+                                   int index,
+                                   SkRecords::Is<SkRecords::SaveLayer> saveLayerMatch) const = 0;
+    virtual void onSave(SkRecord* records, int index) const = 0;
+    virtual void onRestore(SkRecord* records, int index) const = 0;
+    virtual void onDraw(SkRecord* records, int index, SkRecords::IsSingleDraw& drawMatch) const = 0;
+    virtual void onOther(SkRecord* records, int index) const = 0;
+};
 
-    void onSave(SkRecord*, int, State*) const {}
+template <typename MatchState>
+void SkOptPass<MatchState>::transform(SkRecord* records) const {
+    frames.clear();
 
-    void onDraw(SkRecord*, int, SkPaint* p, State* cur, bool insideSaveScope) const {
-        if (insideSaveScope) {
-            return;
+    int save_count = 0;
+    for (int i = 0; i < records->count(); i++) {
+        if (records->mutate(i, isSaveLayer)) {
+            MatchState state = onSaveLayer(records, i, isSaveLayer);
+            Frame frame;
+            frame.match_state = state;
+            frame.save_count = save_count;
+            frames.push_back(frame);
+        } else if (records->mutate(i, isSave)) {
+            save_count += 1;
+            onSave(records, i);
+        } else if (records->mutate(i, isRestore)) {
+            if (frames.empty()) {
+                SkASSERTF(save_count > 0, "unbalanced restore at command %d", i);
+                save_count -= 1;
+                continue;
+            }
+            if (frames.back().save_count < save_count) {
+                save_count -= 1;
+                continue;
+            }
+            onRestore(records, i);
+            frames.pop_back();
+        } else if (records->mutate(i, isDraw)) {
+            onDraw(records, i, isDraw);
+        } else {
+            onOther(records, i);
         }
-        if (cur && cur->phase == Phase::Matching && !isPaintPlain(p, false))
-            cur->phase = Phase::Ignore;
     }
-    void onRestoreLayer(SkRecord* r, int, State* cur, const Frame* frame) const {
-        if (cur && cur->phase == Phase::Matching) {
-            r->replace<SkRecords::Save>(frame->layerIndex);
-            match_count += 1;
-        }
-    }
-    void onRestoreNormal(SkRecord*, int, State*) const {}
-    void onOther(SkRecord*, int, State*) const {}
+}
+
+struct RemoveOpaqueSaveLayerPassMatchState {
+    enum Kind {
+        Matching,
+        Ignore,
+    } kind = Kind::Ignore;
+    int save_layer_index = -1;
+};
+
+struct RemoveOpaqueSaveLayerPass : SkOptPass<RemoveOpaqueSaveLayerPassMatchState> {
+    using MatchState = RemoveOpaqueSaveLayerPassMatchState;
+    using SkOptPass<MatchState>::matchCount;
+    using SkOptPass<MatchState>::operator();
+    using SkOptPass<MatchState>::transform;
 
 private:
-    mutable int match_count = 0;
+    MatchState onSaveLayer(SkRecord* records,
+                           int index,
+                           SkRecords::Is<SkRecords::SaveLayer> saveLayerMatch) const override;
+    void onSave(SkRecord* records, int index) const override;
+    void onRestore(SkRecord* records, int index) const override;
+    void onDraw(SkRecord* records, int index, SkRecords::IsSingleDraw& drawMatch) const override;
+    void onOther(SkRecord* records, int index) const override;
 };
+
+using NewRemoveOpaqueSaveLayers = RemoveOpaqueSaveLayerPass;
 
 #endif  // EASTER_EGG_SKIA_EASTEREGG_H_
