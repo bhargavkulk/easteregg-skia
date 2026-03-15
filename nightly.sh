@@ -83,5 +83,5 @@ python scripts/report_gen.py \
        --skp-dir skps/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
        --backend-name Ganesh/Intel \
-       # --backend grvk \
        --latex-prefix gnin
+       # --backend grvk \
