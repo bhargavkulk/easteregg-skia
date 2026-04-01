@@ -29,12 +29,12 @@ uv run python scripts/run_all_skps.py \
        --opt-dir opt \
        --report-dir "report" \
        --nanobench-dir "report/nanobench" \
-       --json-dir old_jsons/ \
+       --json-dir old_jsons \
        --samples 100 \
        --renderer out/Debug/renderer_opt \
        --render-tool renderer_opt \
-       --png-dir report/pngs \
-       --backend grmtl
+       --png-dir report/pngs # \
+       # --backend grmtl
 
 uv run python scripts/report_gen.py \
        --nanobench-dir "report/nanobench" \
@@ -43,6 +43,8 @@ uv run python scripts/report_gen.py \
        --output "report/index.html" \
        --skp-dir old_bench/ \
        --optimizer-stdout out/Debug/optimizer_stdout \
-       --backend-name Graphite/Metal \
-       --backend grmtl \
-       --latex-prefix grmtl
+       --backend-name Ganesh/Apple \
+       --latex-prefix gnap # \
+       # --backend grmtl
+
+#  g0.598425439/0.504267742

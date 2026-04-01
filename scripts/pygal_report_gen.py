@@ -1,7 +1,5 @@
 import argparse
-import base64
 import html
-import io
 import json
 import os
 import re
@@ -27,14 +25,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--title', type=str, default='Easteregg Benchmark Report')
     parser.add_argument('--backend', type=str, default='gl')
     parser.add_argument('--backend-name', type=str, default='ganesh-opengl')
-    parser.add_argument('--latex-prefix', type=str, default=None)
     parser.add_argument('--skp-dir', type=Path, default=Path('skps'))
     parser.add_argument('--optimizer-stdout', type=Path, default=Path('out/Debug/optimizer_stdout'))
     return parser.parse_args()
 
 
 FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
-PLOT_DPI = 320
 
 
 def backend_macro_prefix(backend: str) -> str:
@@ -215,6 +211,16 @@ img {{ max-width: 100%; height: auto; border: 1px solid #444; background: white;
     return _rel_href(report_index.parent, page_path)
 
 
+def _pygal_svg_html(chart: object, alt_text: str) -> tuple[str, str | None]:
+    svg_text = chart.render(is_unicode=True)
+    svg_html = (
+        f'<div role="img" aria-label="{html.escape(alt_text)}" style="max-width:100%;height:auto">'
+        f'{svg_text}'
+        '</div>'
+    )
+    return svg_html, svg_text
+
+
 def empirical_cdf_png_base64_logx(
     ratios: np.ndarray,
     backend_name: str,
@@ -224,6 +230,7 @@ def empirical_cdf_png_base64_logx(
     line_color: str = '#1f77b4',
     line_style: str = '-',
 ) -> tuple[str, str | None]:
+    del line_color, line_style
     ratios = np.asarray(ratios, dtype=float)
     ratios = ratios[np.isfinite(ratios) & (ratios > 0)]
     n = int(ratios.size)
@@ -231,67 +238,21 @@ def empirical_cdf_png_base64_logx(
         return '<p>No speed ratios to plot.</p>', None
 
     try:
-        import matplotlib
-
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        from matplotlib.ticker import PercentFormatter
+        import pygal
     except ImportError:
-        return '<p>matplotlib is not available; cannot render the CDF plot.</p>', None
+        return '<p>pygal is not available; cannot render the CDF plot.</p>', None
 
     ratios.sort()
     y = np.arange(1, n + 1, dtype=float) / n
+    cdf_points = list(zip(ratios.tolist(), y.tolist()))
 
-    q_low = float(np.quantile(ratios, 0.05))
-    q_high = float(np.quantile(ratios, 0.95))
-    x_min = min(q_low, 1.0, float(ratios[0]))
-    x_max = max(q_high, 1.0, float(ratios[-1]))
-    if x_min == x_max:
-        x_min -= 0.05
-        x_max += 0.05
-    pad = 0.05 * (x_max - x_min)
-    x_min -= pad
-    x_max += pad
-
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
-    ax.step(
-        ratios,
-        y,
-        where='post',
-        linewidth=2,
-        color=line_color,
-        linestyle=line_style,
-        label=f'{line_label} (n={n})',
-        zorder=3,
-    )
-    ax.axvline(1.0, color='#c00', linewidth=1.5, linestyle='--', zorder=1)
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(0.0, 1.0)
-    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
-    ax.set_xlabel(x_label)
-    ax.set_ylabel('Benchmarks at or below this speedup')
-    ax.set_title(
-        f'{title_prefix}\n(on {backend_name}, n={n})',
-        loc='center',
-        x=0.5,
-        ha='center',
-        fontsize=10,
-    )
-    fig.tight_layout()
-    png_buf = io.BytesIO()
-    fig.savefig(png_buf, format='png', dpi=PLOT_DPI, bbox_inches='tight')
-    svg_buf = io.BytesIO()
-    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
-    plt.close(fig)
-
-    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
-    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
-
-    img_html = (
-        '<img alt="Speed ratio CDF plot" style="max-width:100%;height:auto" '
-        f'src="data:image/png;base64,{img_b64}"/>'
-    )
-    return img_html, svg_text
+    chart = pygal.XY()
+    chart.title = f'{title_prefix} (on {backend_name}, n={n})'
+    chart.x_title = x_label
+    chart.y_title = 'Benchmarks at or below this speedup'
+    chart.add(line_label, cdf_points)
+    chart.add('x=1.0', [(1.0, 0.0), (1.0, 1.0)], show_dots=False)
+    return _pygal_svg_html(chart, 'Speed ratio CDF plot')
 
 
 def opt_time_vs_commands_png_base64(
@@ -307,47 +268,18 @@ def opt_time_vs_commands_png_base64(
         return '<p>No opt-time data to plot.</p>', None
 
     try:
-        import matplotlib
-
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
+        import pygal
     except ImportError:
-        return '<p>matplotlib is not available; cannot render the opt-time plot.</p>', None
+        return '<p>pygal is not available; cannot render the opt-time plot.</p>', None
 
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
-    ax.scatter(x, y, s=14, alpha=0.8, color='#1f77b4')
+    points = list(zip(x.tolist(), y.tolist()))
 
-    if n >= 2:
-        slope, intercept = np.polyfit(x, y, 1)
-        xfit = np.linspace(float(np.min(x)), float(np.max(x)), 200)
-        yfit = slope * xfit + intercept
-        ax.plot(xfit, yfit, linewidth=1.8, color='#c00', linestyle='--')
-
-    ax.set_xlabel('No. of commands in SKP')
-    ax.set_ylabel('Optimization Time (ms)')
-    ax.set_title(
-        f'Optimization Time vs Program Size\n(on {backend_name}, n={n})',
-        loc='center',
-        x=0.5,
-        ha='center',
-        fontsize=10,
-    )
-
-    fig.tight_layout()
-    png_buf = io.BytesIO()
-    fig.savefig(png_buf, format='png', dpi=PLOT_DPI, bbox_inches='tight')
-    svg_buf = io.BytesIO()
-    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
-    plt.close(fig)
-
-    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
-    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
-
-    img_html = (
-        '<img alt="OptTime vs command count plot" style="max-width:100%;height:auto" '
-        f'src="data:image/png;base64,{img_b64}"/>'
-    )
-    return img_html, svg_text
+    chart = pygal.XY(stroke=False)
+    chart.title = f'Optimization Time vs No. of commands in SKP (on {backend_name}, n={n})'
+    chart.x_title = 'No. of commands in SKP'
+    chart.y_title = 'Optimization Time (ms)'
+    chart.add('Benchmarks', points)
+    return _pygal_svg_html(chart, 'OptTime vs command count plot')
 
 
 def baseline_vs_optimized_speed_xy_png_base64(
@@ -363,71 +295,21 @@ def baseline_vs_optimized_speed_xy_png_base64(
         return '<p>No baseline/optimized speed pairs to plot.</p>', None
 
     try:
-        import matplotlib
-
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
+        import pygal
     except ImportError:
-        return '<p>matplotlib is not available; cannot render the speed-pair plot.</p>', None
+        return '<p>pygal is not available; cannot render the speed-pair plot.</p>', None
 
-    x = base
-    y = opt
+    points = list(zip(base.tolist(), opt.tolist()))
+    lo = float(min(np.min(base), np.min(opt)))
+    hi = float(max(np.max(base), np.max(opt)))
 
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=PLOT_DPI)
-    ax.scatter(x, y, s=14, alpha=0.8, color='#1f77b4', zorder=3)
-
-    lo = float(min(np.min(x), np.min(y)))
-    hi = float(max(np.max(x), np.max(y)))
-    if lo == hi:
-        pad = 0.05 * lo if lo > 0 else 0.05
-        lo -= pad
-        hi += pad
-    ax.plot([lo, hi], [lo, hi], linewidth=1.5, color='#c00', linestyle='--', zorder=1)
-
-    # Constant-factor speedup guide: y = x / 2 (optimized is 2x faster than baseline).
-    x_half_start = max(lo, 2.0 * lo)
-    x_half_end = hi
-    if x_half_start <= x_half_end:
-        ax.plot(
-            [x_half_start, x_half_end],
-            [x_half_start / 2.0, x_half_end / 2.0],
-            linewidth=1.3,
-            color='#808080',
-            linestyle='--',
-            zorder=1,
-        )
-
-    ax.set_xlim(lo, hi)
-    ax.set_ylim(lo, hi)
-    ax.set_xscale('log', base=2)
-    ax.set_yscale('log', base=2)
-    ax.set_aspect('equal', adjustable='box')
-
-    ax.set_xlabel('Baseline time (ms)')
-    ax.set_ylabel('Optimized time (ms)')
-    ax.set_title(
-        f'Baseline vs Optimized time pairs\n(on {backend_name}, n={n})',
-        loc='center',
-        x=0.5,
-        ha='center',
-        fontsize=10,
-    )
-
-    fig.tight_layout()
-    png_buf = io.BytesIO()
-    fig.savefig(png_buf, format='png', dpi=PLOT_DPI, bbox_inches='tight')
-    svg_buf = io.BytesIO()
-    fig.savefig(svg_buf, format='svg', bbox_inches='tight')
-    plt.close(fig)
-
-    img_b64 = base64.b64encode(png_buf.getvalue()).decode('ascii')
-    svg_text = svg_buf.getvalue().decode('utf-8', errors='replace')
-
-    img_html = (
-        '<img alt="Baseline vs optimized time pairs plot" style="max-width:100%;height:auto" '
-        f'src="data:image/png;base64,{img_b64}"/>'
-    )
-    return img_html, svg_text
+    chart = pygal.XY(stroke=False)
+    chart.title = f'Baseline vs Optimized time pairs (on {backend_name}, n={n})'
+    chart.x_title = 'Baseline time (ms)'
+    chart.y_title = 'Optimized time (ms)'
+    chart.add('Benchmarks', points)
+    chart.add('y=x', [(lo, lo), (hi, hi)], stroke=True, show_dots=False)
+    return _pygal_svg_html(chart, 'Baseline vs optimized time pairs plot')
 
 
 def run_optimizer_stdout(binary: Path, skp: Path) -> tuple[Optional[int], dict[str, int]]:
@@ -683,14 +565,6 @@ def main() -> None:
         '\n'.join(table_rows) if s else '<p>No benchmarks with save layers were found.</p>'
     )
     benchmark_count = len(s)
-    if benchmark_count > 0:
-        geomean_baseline_render_ms = float(
-            np.exp(np.mean(np.log(np.asarray([row[2] for row in s], dtype=float))))
-        )
-        geomean_baseline_render_display = f'{geomean_baseline_render_ms:.3f}'
-    else:
-        geomean_baseline_render_ms = None
-        geomean_baseline_render_display = 'n/a'
 
     table_json = None
     if args.table_json is not None:
@@ -754,7 +628,7 @@ def main() -> None:
         ],
         dtype=float,
     )
-    backend_prefix = args.latex_prefix if args.latex_prefix is not None else backend_macro_prefix(args.backend)
+    backend_prefix = backend_macro_prefix(args.backend)
     if ratios.size > 0:
         pct_speedup_gt_one = 100.0 * float(np.mean(ratios > 1.0))
         speedup_gt_one_display = f'{pct_speedup_gt_one:.1f}%'
@@ -910,37 +784,8 @@ def main() -> None:
         ('topoptpct', pct_most_common_optimization),
         ('timerovhns', timer_overhead_ns),
     ]
-    speedup_macro_names = {
-        'spmatchmin',
-        'spmatchmax',
-        'spnomatchmin',
-        'spnomatchmax',
-        'minspminmatch',
-        'maxspeed',
-    }
-    percentage_macro_names = {
-        'pctspeed',
-        'pctslow',
-        'pctspmatch',
-        'pctspnomatch',
-        'pctbenchspmatch',
-        'pctslownomatch',
-        'topoptpct',
-    }
-
-    def latex_macro_suffix(name: str, value: object) -> str:
-        if value is None:
-            return ''
-        suffix = ''
-        if name in speedup_macro_names:
-            suffix += r'\texttimes'
-        if name in percentage_macro_names:
-            suffix += r'\%'
-        return suffix
-
     latex_macros_text = '\n'.join(
-        f'\\newcommand{{\\{backend_prefix}{name}}}'
-        f'{{\\fillin{{{latex_macro_value(value)}{latex_macro_suffix(name, value)}}}\\xspace}}'
+        f'\\newcommand{{\\{backend_prefix}{name}}}{{{latex_macro_value(value)}}}'
         for name, value in latex_macros
     )
     cdf_png_html, cdf_svg_text = empirical_cdf_png_base64_logx(
@@ -948,7 +793,7 @@ def main() -> None:
         args.backend_name,
         'Empirical CDF of speedup',
         'Baseline / Optimized',
-        'Baseline / Optimized',
+        'Speedup (Baseline / Optimized)',
         line_color='#1f77b4',
         line_style='-',
     )
@@ -975,7 +820,7 @@ def main() -> None:
         args.backend_name,
         'Empirical CDF of total speedup',
         'Baseline / (Optimized + OptTime)',
-        'Baseline / (Optimized + Optimization Time)',
+        'Total speedup (Baseline / (Optimized + OptTime))',
         line_color='#1f77b4',
         line_style='-',
     )
@@ -1127,7 +972,6 @@ table tr:hover {{
 <div class="stats-box">
   <h2>Stats</h2>
   <ul>
-    <li>Geomean baseline render time: <code>{html.escape(geomean_baseline_render_display)}</code> ms.</li>
     <li>Overall: speedups (&gt; 1.0) <code>{html.escape(speedup_gt_one_display)}</code>; slowdowns (&lt; 1.0) <code>{html.escape(slowdowns_display)}</code>.</li>
     <li>Matched speedups: all benchmarks <code>{html.escape(benchmarks_with_matches_and_speedup_display)}</code>; among speedups <code>{html.escape(speedup_with_matches_fraction_display)}</code>.</li>
     <li>Unmatched speedups (among speedups): <code>{html.escape(speedup_without_matches_fraction_display)}</code>.</li>
@@ -1149,7 +993,7 @@ table tr:hover {{
 <h2>Baseline vs (Optimized + OptTime) Speed Ratios</h2>
 <p>Each benchmark contributes one point: <code>baseline_geomean / (optimized_geomean + opt_time_ms)</code>. Values &gt; 1 include optimization-time overhead and still beat baseline end-to-end.</p>
 {cdf_total_plot}
-<h2>Baseline vs Optimized Time</h2>
+<h2>Baseline vs Optimized Time Pairs (XY)</h2>
 <p>Each benchmark contributes one point: x = baseline time (ms), y = optimized time (ms). Points below <code>y = x</code> indicate optimized is faster.</p>
 {speed_pair_plot}
 <h2>OptTime vs Command Count</h2>
