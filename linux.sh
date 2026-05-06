@@ -9,7 +9,7 @@ SKP_DIR=${SKP_DIR:-bench100/skps}
 JSON_DIR=${JSON_DIR:-bench100/jsons}
 SAMPLES=${SAMPLES:-100}
 
-XORG_LOG=${XORG_LOG:-$REPORT_DIR/Xorg-$DISPLAY_NUMBER.log}
+XORG_LOG=${XORG_LOG:-report/Xorg-$DISPLAY_NUMBER.log}
 
 stop_xorg() {
     if [ -n "$XORG_PID" ] && kill -0 "$XORG_PID" >/dev/null 2>&1; then
