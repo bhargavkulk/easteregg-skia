@@ -32,9 +32,9 @@ start_xorg() {
 
 trap stop_xorg EXIT
 
-if [ ! -d "out/Debug" ]; then
-    python3 tools/git-sync-deps
-fi
+#if [ ! -d "out/Debug" ]; then
+#    python3 tools/git-sync-deps
+#fi
 
 ./bin/gn gen out/Debug --args='skia_enable_graphite=true skia_use_vulkan=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
 ninja -C out/Debug optimizer nanobench renderer_opt skp_parser \
