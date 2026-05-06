@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e -x
 
+export PATH="/home/nightlies/.local/bin:$PATH"
+
 DISPLAY_NUMBER=${DISPLAY_NUMBER:-99}
 export DISPLAY=":$DISPLAY_NUMBER"
 XORG_PID=""
