@@ -98,6 +98,7 @@ def run_renderer(
     input: Path,
     output: Path,
     render_tool: str,
+    backend: str,
     opt: bool = False,
     transform: str = 'easteregg',
 ) -> None:
@@ -123,6 +124,8 @@ def run_renderer(
             str(input),
             '--output',
             str(output),
+            '--backend',
+            backend,
             '--opt',
             'true' if opt else 'false',
             '--transform',
@@ -195,13 +198,27 @@ def main():
         bl_png: Path = args.png_dir / f'{stem}.png'
         ee_png: Path = args.png_dir / f'{stem}__ee.png'
         if args.render_tool == 'renderer_opt':
-            run_renderer(args.renderer, skp, bl_png, args.render_tool, opt=False, transform='none')
             run_renderer(
-                args.renderer, skp, ee_png, args.render_tool, opt=True, transform='easteregg'
+                args.renderer,
+                skp,
+                bl_png,
+                args.render_tool,
+                args.backend,
+                opt=False,
+                transform='none',
+            )
+            run_renderer(
+                args.renderer,
+                skp,
+                ee_png,
+                args.render_tool,
+                args.backend,
+                opt=True,
+                transform='easteregg',
             )
         else:
-            run_renderer(args.renderer, none_output, bl_png, args.render_tool)
-            run_renderer(args.renderer, ee_output, ee_png, args.render_tool)
+            run_renderer(args.renderer, none_output, bl_png, args.render_tool, args.backend)
+            run_renderer(args.renderer, ee_output, ee_png, args.render_tool, args.backend)
 
     print(f'Ran {bench_count} nanobench suites')
 

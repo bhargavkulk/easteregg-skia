@@ -3744,6 +3744,23 @@ test_app("optimizer") {
   ]
 }
 
+test_app("optimizer_clean") {
+  sources = [ "easteregg/optimizer_clean.cpp" ]
+  deps = [
+    ":easteregg",
+    ":flags",
+    ":skia",
+  ]
+}
+
+test_app("optimizer_dumb") {
+  sources = [ "easteregg/optimizer_dumb.cpp" ]
+  deps = [
+    ":flags",
+    ":skia",
+  ]
+}
+
 test_app("renderer") {
   sources = [ "easteregg/renderer.cpp" ]
   deps = [
@@ -3757,8 +3774,18 @@ test_app("renderer_opt") {
   deps = [
     ":easteregg",
     ":flags",
+    ":gpu_tool_utils",
     ":skia",
     ":tool_utils",
+  ]
+}
+
+test_app("backend_limit") {
+  sources = [ "easteregg/backend_limit.cpp" ]
+  deps = [
+    ":flags",
+    ":gpu_tool_utils",
+    ":skia",
   ]
 }
 

@@ -1,79 +1,159 @@
 import argparse
+import asyncio
+import json
+import logging
+import os
+import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from urllib.parse import urlparse
 
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
+from playwright.async_api import Browser, async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(levelname)s] %(message)s',
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
 
 
-class SkpDumpError(RuntimeError):
-    """Raised when generating an SKP for a URL fails."""
+@dataclass
+class Args:
+    urls: Path
+    out: Path
 
 
-def dump_skp(browser, name: str, url: str, out_root: Path) -> None:
-    site_dir = out_root / name
-    site_dir.mkdir(parents=True, exist_ok=True)
-    page = browser.new_page()
-    try:
-        full_url = url if url.startswith('https://') else f'https://{url}'
+def existing_path(value: str):
+    path = Path(value)
+
+    if not path.exists():
+        raise argparse.ArgumentTypeError('path does not exist')
+
+    return path
+
+
+def parse_args() -> Args:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('urls', type=existing_path)
+    parser.add_argument('out', type=Path)
+
+    return Args(**vars(parser.parse_args()))
+
+
+async def dump_skp(
+    browser: Browser,
+    semaphore: asyncio.Semaphore,
+    name: str,
+    url: str,
+    path: Path,
+    timeout: int,
+    wait_for: int,
+):
+    async with semaphore:
+        context = await browser.new_context()
+        page = await context.new_page()
+
+        logger.info(f'{name} - opening {url}')
         try:
-            page.goto(full_url, timeout=70000)
+            await page.goto(url, timeout=timeout, wait_until='domcontentloaded')
+            await page.wait_for_timeout(wait_for)
+
+            logger.info(f'{name} - dumping skps')
+
+            output_dir = json.dumps(str(path.absolute()))
+            await page.evaluate(f'chrome.gpuBenchmarking.printToSkPicture({output_dir})')
+            logger.info(f'{name} - skps dumped')
         except PlaywrightTimeoutError as exc:
-            raise SkpDumpError(f'[{name}] timeout loading page: {exc}') from exc
-        except PlaywrightError as exc:
-            raise SkpDumpError(f'[{name}] failed to load page: {exc}') from exc
+            logger.error(f'{name} - timeout loading page {exc}')
+        except Exception as exc:
+            logger.error(f'{name} - failed to dump skp {exc}')
+        finally:
+            await page.close()
+            await context.close()
 
-        page.wait_for_timeout(5000)
+
+async def dump_skps_in_par(
+    urls: list[tuple[str, str, Path]],
+    workers: int,
+    timeout: int,
+    wait_for: int,
+):
+    semaphore = asyncio.Semaphore(max(1, workers))
+
+    async with async_playwright() as pw:
+        logger.info('starting up Chrome')
+        browser = await pw.chromium.launch(
+            headless=True, args=['--no-sandbox', '--enable-gpu-benchmarking']
+        )
 
         try:
-            page.evaluate(f"chrome.gpuBenchmarking.printToSkPicture('{site_dir.absolute()}')")
-        except PlaywrightError as exc:
-            raise SkpDumpError(f'[{name}] failed to dump SKP: {exc}') from exc
+            tasks = [
+                asyncio.create_task(
+                    dump_skp(browser, semaphore, name, url, path, timeout, wait_for)
+                )
+                for name, url, path in urls
+            ]
 
-    finally:
-        page.close()
+            await asyncio.gather(*tasks)
+        finally:
+            logger.info('closing Chrome')
+            await browser.close()
 
 
-def process_urls(urls: dict[str, Any], out_dir: Path) -> None:
-    try:
-        with sync_playwright() as playwright:
-            print('[*] starting Chrome')
-            browser = playwright.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--enable-gpu-benchmarking'],
-            )
-            try:
-                for name, url in urls.items():
-                    print(f'[*] processing {name}')
-                    site_dir = out_dir / name
-                    dump_skp(browser, name, url, out_dir)
-                    for layer in site_dir.glob('*.skp'):
-                        target = out_dir / f'{name}__{layer.name}'
-                        layer.rename(target)
-                    site_dir.rmdir()
-            finally:
-                print('[*] closing browser')
-                browser.close()
-    except SkpDumpError as exc:
-        print(f'[error] {exc}')
-        raise SystemExit(1)
-    except PlaywrightError as exc:
-        print(f'[error] Playwright failed to start Chrome: {exc}')
-        raise SystemExit(1)
+def flatten_skps_in_place(skps_root: Path) -> None:
+    moves: list[tuple[Path, Path]] = []
+
+    for site_dir in skps_root.iterdir():
+        if not site_dir.is_dir():
+            continue
+
+        site_name = site_dir.name
+        for skp_file in site_dir.glob('*.skp'):
+            dst = skps_root / f'{site_name}__{skp_file.name}'
+            moves.append((skp_file, dst))
+
+    for src, dst in moves:
+        src.rename(dst)
+
+    for site_dir in skps_root.iterdir():
+        if site_dir.is_dir():
+            site_dir.rmdir()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Dump SKPs from Chrome via Playwright.')
-    parser.add_argument('input_file', type=Path, help='TOML file containing url = value entries')
-    parser.add_argument('skp_folder', type=Path, help='Directory to place SKP outputs')
-    args = parser.parse_args()
+    args = parse_args()
 
-    with args.input_file.open('rb') as handle:
-        urls = tomllib.load(handle)
+    args.out.mkdir(parents=True, exist_ok=True)
+    skps = args.out / 'skps'
+    skps.mkdir(parents=True, exist_ok=True)
 
-    process_urls(urls, args.skp_folder)
+    with args.urls.open('rb') as fp:
+        urls = tomllib.load(fp)
+
+    urls_to_dump: list[tuple[str, str, Path]] = []
+    for name, url in urls.items():
+        output_path = skps / name
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        url = url if url.startswith('http://') or url.startswith('https://') else 'https://' + url
+
+        urls_to_dump.append((name, url, output_path))
+
+    asyncio.run(
+        dump_skps_in_par(
+            urls_to_dump,
+            max(1, min(4, os.cpu_count() or 1)),
+            60000,
+            2000,
+        )
+    )
+
+    flatten_skps_in_place(skps)
+
+    logger.info('flattened skps')
 
 
 if __name__ == '__main__':

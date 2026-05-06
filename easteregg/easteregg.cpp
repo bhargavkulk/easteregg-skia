@@ -346,6 +346,8 @@ void DstInToClip::transform(SkRecord* records) const {
                         -1,
                         saveCount,
                         {},
+                        // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                        SkM44(),
                 });
                 continue;
             }
@@ -360,6 +362,8 @@ void DstInToClip::transform(SkRecord* records) const {
                         -1,
                         saveCount,
                         {},
+                        // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                        SkM44(),
                 });
                 continue;
             }
@@ -375,6 +379,8 @@ void DstInToClip::transform(SkRecord* records) const {
                             -1,
                             saveCount,
                             {},
+                            // DSTIN CONCAT DEBUG: inner DstIn starts with identity.
+                            SkM44(),
                     });
                 } else {
                     state_stack.back().state = MatchState::Ignore;
@@ -386,6 +392,8 @@ void DstInToClip::transform(SkRecord* records) const {
                             -1,
                             saveCount,
                             {},
+                            // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                            SkM44(),
                     });
                 }
                 continue;
@@ -404,6 +412,8 @@ void DstInToClip::transform(SkRecord* records) const {
                         -1,
                         saveCount,
                         {},
+                        // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                        SkM44(),
                 });
                 continue;
             }
@@ -418,6 +428,8 @@ void DstInToClip::transform(SkRecord* records) const {
                         -1,
                         saveCount,
                         {},
+                        // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                        SkM44(),
                 });
                 continue;
             }
@@ -431,6 +443,8 @@ void DstInToClip::transform(SkRecord* records) const {
                     -1,
                     saveCount,
                     {},
+                    // DSTIN CONCAT DEBUG: outer frame starts with identity.
+                    SkM44(),
             });
 
         } else if (IS_RECORD(isSave)) {
@@ -452,9 +466,10 @@ void DstInToClip::transform(SkRecord* records) const {
 
             if (state_stack.back().state == MatchState::MatchDstIn ||
                 state_stack.back().state == MatchState::MatchDraw) {
-                state_stack.back().state = MatchState::Ignore;
-                SkASSERTF(state_stack.size() >= 2, "DstInToClip: expected outer state");
-                state_stack[state_stack.size() - 2].state = MatchState::Ignore;
+                // DSTIN CONCAT DEBUG: allow inner-mask concats to accumulate as
+                // long as they cancel out by the time we commit the rewrite.
+                state_stack.back().innerConcat =
+                        isConcat44.get()->matrix * state_stack.back().innerConcat;
             } else if (state_stack.back().state != MatchState::Ignore) {
                 state_stack.back().state = MatchState::Ignore;
             }
@@ -473,6 +488,17 @@ void DstInToClip::transform(SkRecord* records) const {
 
             // now we check if we matched the inner dstin mask
             if (state_stack.back().state == MatchState::MatchDraw) {
+                // DSTIN CONCAT DEBUG: only accept the rewrite if the inner DstIn
+                // concats cancel back to identity. Otherwise the inserted clip path
+                // would be in the wrong coordinate space.
+                if (state_stack.back().innerConcat != SkM44()) {
+                    const MatchState innerState = state_stack.back();
+                    state_stack.pop_back();
+                    if (!state_stack.empty()) {
+                        state_stack.back().state = MatchState::Ignore;
+                    }
+                    continue;
+                }
                 // we pop the current state
                 // then we change the new current state to Matched
                 const MatchState innerState = state_stack.back();

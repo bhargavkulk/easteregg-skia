@@ -144,6 +144,9 @@ private:
         int lastDrawIndex;
         int saveCount;
         skia_private::STArray<8, int> clipIndices;
+        // DSTIN CONCAT DEBUG: Track the net inner-mask transform so we can
+        // tolerate cancelling concats and still bail on non-cancelling ones.
+        SkM44 innerConcat = SkM44();
     };
 
     mutable skia_private::STArray<8, MatchState> state_stack;
