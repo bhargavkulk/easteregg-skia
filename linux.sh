@@ -37,7 +37,8 @@ if [ ! -d "out/Debug" ]; then
 fi
 
 ./bin/gn gen out/Debug --args='skia_enable_graphite=true skia_use_vulkan=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
-ninja -C out/Debug optimizer nanobench renderer_opt skp_parser optimizer_stdout backend_limit
+ninja -C out/Debug optimizer nanobench renderer_opt skp_parser \
+      optimizer_stdout backend_limit print_bounds
 
 rm -rf opt report
 mkdir -p opt
