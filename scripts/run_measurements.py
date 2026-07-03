@@ -12,6 +12,7 @@ class Args:
     opt_dir: Path
     report_dir: Path
     samples: int
+    nanobench_runs: int
     backend: str
     cullmax: int
 
@@ -23,6 +24,7 @@ def parse_args() -> Args:
     parser.add_argument('opt_dir', type=Path)
     parser.add_argument('report_dir', type=Path)
     parser.add_argument('--samples', type=int, default=100)
+    parser.add_argument('--nanobench-runs', type=int, default=25)
     parser.add_argument('--backend', default='gl')
     parser.add_argument('--cullmax', type=int, default=0)
     return Args(**vars(parser.parse_args()))
@@ -75,6 +77,7 @@ def run_optimizer_stdout(skp: Path) -> dict[str, int]:
 
 
 def run_nanobench(skps: list[Path], result: Path, clip: str, samples: int, backend: str):
+    result.parent.mkdir(parents=True, exist_ok=True)
     command = [
         'out/Debug/nanobench',
         '--sourceType',
@@ -128,6 +131,8 @@ def main():
     args.opt_dir.mkdir(parents=True, exist_ok=True)
     args.report_dir.mkdir(parents=True, exist_ok=True)
 
+    assert args.nanobench_runs > 0, '--nanobench-runs must be positive'
+
     nanobench_results = args.report_dir / 'nanobench'
     nanobench_results.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +141,7 @@ def main():
 
     bench_count = 0
 
-    skps = list(args.skp_dir.rglob('*.skp'))
+    skps = sorted(args.skp_dir.rglob('*.skp'))
 
     assert len(skps) != 0, f'{args.skp_dir} is empty'
 
@@ -155,14 +160,20 @@ def main():
         run_optimizer(skp, bl_output, 'none')
         run_optimizer(skp, ee_output, 'easteregg')
 
-        nanobench_file = nanobench_results / f'{stem}__nanobench.json'
-        run_nanobench(
-            [bl_output, ee_output],
-            nanobench_file,
-            clip,
-            args.samples,
-            args.backend,
-        )
+        nanobench_stem_dir = nanobench_results / stem
+        for run_index in range(args.nanobench_runs):
+            run_skps = [bl_output, ee_output]
+            if run_index % 2 == 1:
+                run_skps.reverse()
+
+            nanobench_file = nanobench_stem_dir / f'run_{run_index:03d}.json'
+            run_nanobench(
+                run_skps,
+                nanobench_file,
+                clip,
+                args.samples,
+                args.backend,
+            )
 
         bl_png: Path = pngs / f'{stem}.png'
         ee_png: Path = pngs / f'{stem}__ee.png'

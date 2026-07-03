@@ -11,6 +11,7 @@ from mako.template import Template
 matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 
 
 @dataclass
@@ -64,6 +65,14 @@ def format_count_ratio(count: int, denominator: int) -> str:
     if denominator == 0:
         return f'0.00% ({count} / {denominator})'
     return f'{format_percent(100.0 * count / denominator)} ({count} / {denominator})'
+
+
+def format_run_series(values: list[float]) -> str:
+    return ', '.join(format_float(value) for value in values)
+
+
+def format_confidence_interval(low: float, high: float) -> str:
+    return f'[{format_float(low)}, {format_float(high)}]'
 
 
 def format_stats(stats: dict[str, Any]) -> list[dict[str, str]]:
@@ -142,6 +151,9 @@ def collate_stats(stats_by_backend: dict[str, dict[str, Any]]) -> list[dict[str,
 
 
 def format_row(row: dict[str, Any]) -> dict[str, Any]:
+    bl_run_series_display = format_run_series(row['bl_run_geomeans'])
+    ee_run_series_display = format_run_series(row['ee_run_geomeans'])
+    speedup_run_series_display = format_run_series(row['speedup_runs'])
     return {
         **row,
         'display_name': format_name(row['name']),
@@ -150,8 +162,19 @@ def format_row(row: dict[str, Any]) -> dict[str, Any]:
         'ee_rt_display': format_float(row['ee_rt']),
         'pixel_diff_display': format_float(row['pixel_diff']),
         'speedup_display': format_float(row['speedup']),
+        'speedup_ci_display': format_confidence_interval(
+            row['speedup_ci_low'], row['speedup_ci_high']
+        ),
         'speedup_class': 'speedup-up' if row['speedup'] > 1 else 'speedup-down' if row['speedup'] < 1 else '',
         'pass_counts_display': format_pass_counts(row['pass_counts']),
+        'nanobench_run_count_display': str(row['nanobench_run_count']),
+        'bl_rt_title': f"Median of per-run geomeans from {row['nanobench_run_count']} runs: {bl_run_series_display}",
+        'ee_rt_title': f"Median of per-run geomeans from {row['nanobench_run_count']} runs: {ee_run_series_display}",
+        'speedup_title': f"Median of per-run speedups from {row['nanobench_run_count']} runs: {speedup_run_series_display}",
+        'speedup_ci_title': (
+            f"95% bootstrap CI from {row['nanobench_run_count']} per-run speedups: "
+            f"{speedup_run_series_display}"
+        ),
     }
 
 
@@ -234,6 +257,72 @@ def write_runtime_scatter(
     return f'assets/{png_path.name}', f'assets/{svg_path.name}'
 
 
+def write_speedup_forest_plot(
+    report_dir: Path, results: list[dict[str, Any]], backend: str, platform: str
+) -> tuple[str, str]:
+    assets_dir = report_dir / 'assets'
+    assets_dir.mkdir(exist_ok=True)
+
+    sorted_results = sorted(results, key=lambda row: row['speedup'])
+    y_positions = np.arange(len(sorted_results))
+    rewrite_mask = np.asarray(
+        [any(count > 0 for count in row['pass_counts'].values()) for row in sorted_results],
+        dtype=bool,
+    )
+
+    fig_height = max(5.0, min(12.0, 0.12 * len(sorted_results) + 1.5))
+    fig, ax = plt.subplots(figsize=(8, fig_height), layout='constrained')
+
+    for is_rewrite, color, marker, label in (
+        (False, '#4c78a8', 'o', 'No Rewrite'),
+        (True, '#f58518', '^', 'Rewrite'),
+    ):
+        rows = [row for row, flag in zip(sorted_results, rewrite_mask, strict=True) if flag == is_rewrite]
+        if not rows:
+            continue
+
+        speedups = np.asarray([row['speedup'] for row in rows], dtype=float)
+        ci_lows = np.asarray([row['speedup_ci_low'] for row in rows], dtype=float)
+        ci_highs = np.asarray([row['speedup_ci_high'] for row in rows], dtype=float)
+        y_values = np.asarray(
+            [y for y, flag in zip(y_positions, rewrite_mask, strict=True) if flag == is_rewrite],
+            dtype=float,
+        )
+        ax.errorbar(
+            speedups,
+            y_values,
+            xerr=np.vstack([speedups - ci_lows, ci_highs - speedups]),
+            fmt=marker,
+            markersize=5.5,
+            capsize=2,
+            linewidth=1.2,
+            color=color,
+            label=label,
+        )
+
+    ax.axvline(1.0, color='red', linestyle='--', linewidth=1)
+    ax.set_xscale('log')
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda value, _pos: f'{value:g}'))
+    ax.set_yticks(y_positions)
+    ax.set_title(
+        f'Speedup Confidence Intervals\n(on {backend}/{platform}, N = {len(results)})'
+    )
+    ax.set_xlabel('Speedup (baseline / optimized)')
+    ax.set_ylabel('Benchmark')
+    ax.set_yticklabels([])
+    ax.tick_params(axis='y', length=0)
+    ax.grid(axis='x', linestyle=':', linewidth=0.8, alpha=0.7)
+    ax.invert_yaxis()
+    ax.legend(loc='best')
+
+    png_path = assets_dir / 'speedup_forest.png'
+    svg_path = assets_dir / 'speedup_forest.svg'
+    fig.savefig(png_path, dpi=160)
+    fig.savefig(svg_path)
+    plt.close(fig)
+    return f'assets/{png_path.name}', f'assets/{svg_path.name}'
+
+
 def write_report(report_dir: Path, title: str, backend: str, platform: str) -> None:
     template = Template(
         filename=str(Path(__file__).with_name('templates') / 'report_index.html.mako')
@@ -247,6 +336,9 @@ def write_report(report_dir: Path, title: str, backend: str, platform: str) -> N
     scatter_png_path, scatter_svg_path = write_runtime_scatter(
         report_dir, data['results'], backend, platform
     )
+    forest_png_path, forest_svg_path = write_speedup_forest_plot(
+        report_dir, data['results'], backend, platform
+    )
 
     html = template.render(
         title=title,
@@ -257,6 +349,8 @@ def write_report(report_dir: Path, title: str, backend: str, platform: str) -> N
         total_speedup_cdf_svg_path=total_cdf_svg_path,
         runtime_scatter_path=scatter_png_path,
         runtime_scatter_svg_path=scatter_svg_path,
+        speedup_forest_path=forest_png_path,
+        speedup_forest_svg_path=forest_svg_path,
         results=[format_row(row) for row in data['results']],
     )
     (report_dir / 'index.html').write_text(html, encoding='utf-8')

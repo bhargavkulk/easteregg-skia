@@ -1,10 +1,13 @@
 import argparse
 import json
 import math
+import numpy as np
 import re
+import statistics
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from scipy.stats import bootstrap
 
 FLOAT_RE = re.compile(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?')
 
@@ -78,10 +81,16 @@ class Row:
     name: str
     num_cmds: int
     opt_time: float
+    nanobench_run_count: int
+    bl_run_geomeans: list[float]
+    ee_run_geomeans: list[float]
+    speedup_runs: list[float]
     bl_rt: float
     ee_rt: float
     pixel_diff: float | None
     speedup: float
+    speedup_ci_low: float
+    speedup_ci_high: float
     pass_counts: dict[str, int]
 
 
@@ -97,6 +106,47 @@ class Stats:
     speedup_with_rewrites_count: int
     slowdown_count: int
     slowdown_with_rewrites_count: int
+
+
+def geomean(values: list[float]) -> float:
+    assert values, 'expected at least one value'
+    return math.exp(sum(math.log(x) for x in values) / len(values))
+
+
+def speedup_confidence_interval(speedup_runs: list[float]) -> tuple[float, float]:
+    assert speedup_runs, 'expected at least one speedup run'
+
+    if len(set(speedup_runs)) == 1:
+        value = speedup_runs[0]
+        return value, value
+
+    result = bootstrap(
+        data=(np.asarray(speedup_runs, dtype=float),),
+        statistic=np.median,
+        axis=0,
+        rng=np.random.default_rng(0),
+    )
+    return float(result.confidence_interval.low), float(result.confidence_interval.high)
+
+
+def collect_nanobench_runs(nanobench_root: Path, stem: str) -> list[Path]:
+    stem_dir = nanobench_root / stem
+    assert stem_dir.exists(), f'missing nanobench run directory for {stem}'
+    assert stem_dir.is_dir(), f'{stem_dir} exists but is not a directory'
+    run_files = sorted(stem_dir.glob('run_*.json'))
+    assert run_files, f'no nanobench runs found in {stem_dir}'
+    return run_files
+
+
+def resolve_nanobench_result(results: dict, variant_name: str, backend: str) -> dict:
+    matches = [
+        value
+        for key, value in results.items()
+        if key.startswith(f'{variant_name}_1_') and backend in value
+    ]
+    assert matches, f'missing nanobench result for {variant_name} [{backend}]'
+    assert len(matches) == 1, f'ambiguous nanobench result for {variant_name} [{backend}]'
+    return matches[0][backend]
 
 
 def collate_report(
@@ -120,13 +170,12 @@ def collate_report(
         )
 
     table: list[Row] = []
+    nanobench_root = report / 'nanobench'
 
     for json_file in jsons.glob('*.json'):
         name = json_file.stem
         skp = json_file.stem + '.skp'
 
-        nanobench = report / 'nanobench' / (name + '__nanobench.json')
-        assert nanobench.exists()
         bl = report / 'png' / (name + '.png')
         assert bl.exists()
         ee = report / 'png' / (name + '__ee.png')
@@ -141,27 +190,47 @@ def collate_report(
 
         opt_time = optdict[skp]
 
-        nb_bl_key = f'{name}.skp_1_{width}_{height}'
-        nb_ee_key = f'{name}__ee.skp_1_{width}_{height}'
-        with nanobench.open('rb') as fp:
-            nb_data = json.load(fp)
-        nb_bl_data = nb_data['results'][nb_bl_key][backend]
-        nb_ee_data = nb_data['results'][nb_ee_key][backend]
+        bl_run_geomeans: list[float] = []
+        ee_run_geomeans: list[float] = []
+        speedup_runs: list[float] = []
+        nanobench_runs = collect_nanobench_runs(nanobench_root, name)
+        for nanobench_run in nanobench_runs:
+            with nanobench_run.open('rb') as fp:
+                nb_data = json.load(fp)
+            nb_bl_data = resolve_nanobench_result(nb_data['results'], f'{name}.skp', backend)
+            nb_ee_data = resolve_nanobench_result(nb_data['results'], f'{name}__ee.skp', backend)
 
-        bl_geomean: float = math.exp(
-            sum(math.log(x) for x in nb_bl_data['samples']) / len(nb_bl_data['samples'])
-        )
-        ee_geomean: float = math.exp(
-            sum(math.log(x) for x in nb_ee_data['samples']) / len(nb_ee_data['samples'])
-        )
+            bl_run_geomean = geomean(nb_bl_data['samples'])
+            ee_run_geomean = geomean(nb_ee_data['samples'])
+            bl_run_geomeans.append(bl_run_geomean)
+            ee_run_geomeans.append(ee_run_geomean)
+            speedup_runs.append(bl_run_geomean / ee_run_geomean)
 
-        speedup = bl_geomean / ee_geomean
+        bl_geomean = statistics.median(bl_run_geomeans)
+        ee_geomean = statistics.median(ee_run_geomeans)
+        speedup = statistics.median(speedup_runs)
+        speedup_ci_low, speedup_ci_high = speedup_confidence_interval(speedup_runs)
         pixel_diff = run_compare(bl, ee, diff)
 
         pass_counts = passes_data[skp]
 
         table.append(
-            Row(name, num_cmds, opt_time, bl_geomean, ee_geomean, pixel_diff, speedup, pass_counts)
+            Row(
+                name=name,
+                num_cmds=num_cmds,
+                opt_time=opt_time,
+                nanobench_run_count=len(nanobench_runs),
+                bl_run_geomeans=bl_run_geomeans,
+                ee_run_geomeans=ee_run_geomeans,
+                speedup_runs=speedup_runs,
+                bl_rt=bl_geomean,
+                ee_rt=ee_geomean,
+                pixel_diff=pixel_diff,
+                speedup=speedup,
+                speedup_ci_low=speedup_ci_low,
+                speedup_ci_high=speedup_ci_high,
+                pass_counts=pass_counts,
+            )
         )
 
     total_benchmarks = len(table)

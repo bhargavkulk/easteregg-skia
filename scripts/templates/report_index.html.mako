@@ -52,6 +52,11 @@
     .results-table {
       width: 100%;
     }
+    .results-note {
+      margin: 0 0 10px;
+      color: #555;
+      font-size: 13px;
+    }
     th, td {
       border: 1px solid #e3e3e3;
       padding: 6px 8px;
@@ -172,22 +177,35 @@
             <a class="button" href="${runtime_scatter_svg_path}" download>Download SVG</a>
           </div>
         </div>
+        <div class="plot">
+          <img src="${speedup_forest_path}" alt="Per-benchmark speedup confidence intervals" />
+          <div class="plot-actions">
+            <a class="button" href="${speedup_forest_svg_path}" download>Download SVG</a>
+          </div>
+        </div>
       </div>
     </section>
 
     <section>
       <h2>Results</h2>
+      <p class="results-note">
+        Baseline, Optimized, and Speedup are repeated-run point estimates from <code>report.json</code>:
+        median of per-run geomeans for runtimes, and median of per-run speedups for the ratio.
+        Speedup CI is a 95% bootstrap confidence interval over the per-run speedups.
+      </p>
       <div class="table-wrap">
         <table class="results-table sortable">
           <thead>
             <tr>
               <th>Name</th>
               <th>#cmds</th>
+              <th>Runs</th>
               <th>Opt Time</th>
-              <th>Baseline</th>
-              <th>Optimized</th>
+              <th>Baseline Median</th>
+              <th>Optimized Median</th>
               <th>Pixel Diff</th>
-              <th>Speedup</th>
+              <th>Speedup Median</th>
+              <th>Speedup 95% CI</th>
               <th>Pass Counts</th>
               <th class="no-sort">Images</th>
             </tr>
@@ -197,11 +215,13 @@
             <tr>
               <td class="name">${row['display_name']}</td>
               <td class="num">${row['num_cmds']}</td>
+              <td class="num">${row['nanobench_run_count_display']}</td>
               <td class="num">${row['opt_time_display']}</td>
-              <td class="num">${row['bl_rt_display']}</td>
-              <td class="num">${row['ee_rt_display']}</td>
+              <td class="num" title="${row['bl_rt_title']}">${row['bl_rt_display']}</td>
+              <td class="num" title="${row['ee_rt_title']}">${row['ee_rt_display']}</td>
               <td class="num">${row['pixel_diff_display']}</td>
-              <td class="num ${row['speedup_class']}">${row['speedup_display']}</td>
+              <td class="num ${row['speedup_class']}" title="${row['speedup_title']}">${row['speedup_display']}</td>
+              <td class="num" title="${row['speedup_ci_title']}">${row['speedup_ci_display']}</td>
               <td class="pass-counts mono">${row['pass_counts_display']}</td>
               <td class="links">
                 <a href="png/${row['name']}.png">baseline</a>
