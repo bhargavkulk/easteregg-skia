@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Copies each original JSON next to the JSON files generated for its pass dumps.
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 ORIGINAL_JSON_DIR PASS_JSON_DIR" >&2
+    exit 1
+fi
+
+original_dir=${1%/}
+pass_json_dir=${2%/}
+
+if [[ ! -d "$original_dir" ]]; then
+    echo "Original JSON directory does not exist: $original_dir" >&2
+    exit 1
+fi
+
+if [[ ! -d "$pass_json_dir" ]]; then
+    echo "Pass JSON directory does not exist: $pass_json_dir" >&2
+    exit 1
+fi
+
+found=false
+for json in "$original_dir"/*.json; do
+    [[ -f "$json" ]] || continue
+    found=true
+
+    name=$(basename "$json" .json)
+    destination_dir="$pass_json_dir/$name"
+    if [[ ! -d "$destination_dir" ]]; then
+        echo "No matching pass JSON directory for: $json" >&2
+        exit 1
+    fi
+
+    cp "$json" "$destination_dir/$name.json"
+    echo "$destination_dir/$name.json"
+done
+
+if [[ "$found" == false ]]; then
+    echo "No .json files found in: $original_dir" >&2
+    exit 1
+fi

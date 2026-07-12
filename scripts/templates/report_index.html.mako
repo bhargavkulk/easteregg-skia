@@ -57,6 +57,15 @@
       color: #555;
       font-size: 13px;
     }
+    .latex-macros {
+      width: 100%;
+      min-height: 260px;
+      margin-top: 10px;
+      padding: 8px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      white-space: pre;
+    }
     th, td {
       border: 1px solid #e3e3e3;
       padding: 6px 8px;
@@ -155,6 +164,13 @@
         % endfor
         </tbody>
       </table>
+    </section>
+
+    <section>
+      <details>
+        <summary>LaTeX Macros</summary>
+        <textarea class="latex-macros" readonly spellcheck="false">${latex_macros}</textarea>
+      </details>
     </section>
 
     <section>

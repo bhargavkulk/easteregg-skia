@@ -17,6 +17,7 @@ class Args:
     report: Path
     apple: bool
     cullmax: int
+    latex_prefix: str
 
 
 def existing_path(value: str):
@@ -33,6 +34,7 @@ def parse_args() -> Args:
     parser.add_argument('report', type=existing_path)
     parser.add_argument('--apple', action='store_true')
     parser.add_argument('--cullmax', type=int, default=0)
+    parser.add_argument('--latex_prefix', default='latex')
 
     return Args(**vars(parser.parse_args()))
 
@@ -99,6 +101,7 @@ class Stats:
     total_benchmarks: int
     bl_geomean: float
     ee_geomean: float
+    max_total_speedup: float
     pass_match_counts: dict[str, int]
     most_frequent_pass: str | None
     most_frequent_pass_matches: int
@@ -108,9 +111,86 @@ class Stats:
     slowdown_with_rewrites_count: int
 
 
+LATEX_STAT_NAMES = (
+    'GeoSpeedup',
+    'MaxOptTime',
+    'MaxSpeedup',
+    'MaxTotalSpeedup',
+    'NumBench',
+    'NumWithSpeedup',
+    'NumWithSpeedupMatched',
+    'PctSlower',
+    'NumWithPixDiff',
+    'MinSpeedupMatched',
+    'MaxSpeedupMatched',
+    'MinSpeedupNoMatched',
+    'MaxSpeedupNoMatched',
+)
+LATEX_SPEEDUP_NAMES = {
+    'GeoSpeedup',
+    'MaxSpeedup',
+    'MaxTotalSpeedup',
+    'MinSpeedupMatched',
+    'MaxSpeedupMatched',
+    'MinSpeedupNoMatched',
+    'MaxSpeedupNoMatched',
+}
+
+
 def geomean(values: list[float]) -> float:
     assert values, 'expected at least one value'
     return math.exp(sum(math.log(x) for x in values) / len(values))
+
+
+def latex_prefix(backend: str, apple: bool, requested_prefix: str) -> str:
+    """Choose a backend/platform prefix unless the caller supplied an override."""
+    if requested_prefix != 'latex':
+        return requested_prefix
+    return f"{backend}{'Apple' if apple else 'Intel'}"
+
+
+def latex_value(name: str, value: int | float) -> str:
+    """Format one statistic with its LaTeX display unit."""
+    if name.startswith('Num'):
+        return str(value)
+    if name in LATEX_SPEEDUP_NAMES:
+        return f'{value:.2f}×'
+    if name == 'PctSlower':
+        return f'{value:.2f}\\%'
+    return f'{value:.2f}'
+
+
+def latex_macros(table: list[Row], prefix: str) -> dict[str, str]:
+    """Build LaTeX macro definitions from backend result rows."""
+    speedups = [row.speedup for row in table]
+    matched = [row for row in table if any(count > 0 for count in row.pass_counts.values())]
+    unmatched = [row for row in table if not any(count > 0 for count in row.pass_counts.values())]
+    matched_speedups = [row.speedup for row in matched]
+    unmatched_speedups = [row.speedup for row in unmatched]
+    values: dict[str, int | float] = {
+        'GeoSpeedup': sum(speedups) / len(speedups),
+        'MaxOptTime': max(row.opt_time for row in table),
+        'MaxSpeedup': max(speedups),
+        'MaxTotalSpeedup': max(
+            row.bl_rt / (row.ee_rt + row.opt_time) for row in table
+        ),
+        'NumBench': len(table),
+        'NumWithSpeedup': sum(speedup > 1.0 for speedup in speedups),
+        'NumWithSpeedupMatched': sum(
+            row.speedup > 1.0 and any(count > 0 for count in row.pass_counts.values())
+            for row in table
+        ),
+        'PctSlower': 100.0 * sum(speedup < 1.0 for speedup in speedups) / len(table),
+        'NumWithPixDiff': sum(row.pixel_diff > 0 for row in table),
+        'MinSpeedupMatched': min(matched_speedups),
+        'MaxSpeedupMatched': max(matched_speedups),
+        'MinSpeedupNoMatched': min(unmatched_speedups),
+        'MaxSpeedupNoMatched': max(unmatched_speedups),
+    }
+    return {
+        name: f'\\newcommand{{\\{prefix}{name}}}{{\\fillin{{{latex_value(name, values[name])}}}\\xspace}}'
+        for name in LATEX_STAT_NAMES
+    }
 
 
 def speedup_confidence_interval(speedup_runs: list[float]) -> tuple[float, float]:
@@ -256,11 +336,15 @@ def collate_report(
     slowdown_with_rewrites_count = sum(
         1 for row in table if row.speedup < 1.0 and any(count > 0 for count in row.pass_counts.values())
     )
+    max_total_speedup = max(
+        row.bl_rt / (row.ee_rt + row.opt_time) for row in table
+    )
 
     stats = Stats(
         total_benchmarks=total_benchmarks,
         bl_geomean=math.exp(sum(math.log(row.bl_rt) for row in table) / len(table)),
         ee_geomean=math.exp(sum(math.log(row.ee_rt) for row in table) / len(table)),
+        max_total_speedup=max_total_speedup,
         pass_match_counts=dict(sorted(pass_match_counts.items())),
         most_frequent_pass=hottest_pass,
         most_frequent_pass_matches=hottest_pass_matches,
@@ -306,14 +390,28 @@ def main():
 
     (ganesh / 'report.json').write_text(
         json.dumps(
-            {'stats': asdict(gn_stats), 'results': [asdict(row) for row in gn_table]}, indent=2
+            {
+                'stats': asdict(gn_stats),
+                'results': [asdict(row) for row in gn_table],
+                'latex_macros': latex_macros(
+                    gn_table, latex_prefix('ganesh', args.apple, args.latex_prefix)
+                ),
+            },
+            indent=2,
         )
         + '\n',
         encoding='utf-8',
     )
     (graphite / 'report.json').write_text(
         json.dumps(
-            {'stats': asdict(gr_stats), 'results': [asdict(row) for row in gr_table]}, indent=2
+            {
+                'stats': asdict(gr_stats),
+                'results': [asdict(row) for row in gr_table],
+                'latex_macros': latex_macros(
+                    gr_table, latex_prefix('graphite', args.apple, args.latex_prefix)
+                ),
+            },
+            indent=2,
         )
         + '\n',
         encoding='utf-8',

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Converts every pass-dump SKP into JSON while preserving its directory layout.
+
+set -euo pipefail
+
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 INPUT_PASS_DUMPS_DIR OUTPUT_JSON_DIR" >&2
+    exit 1
+fi
+
+input_dir=${1%/}
+output_dir=${2%/}
+parser=${SKP_PARSER:-out/Debug/skp_parser}
+
+if [[ ! -d "$input_dir" ]]; then
+    echo "Input pass-dump directory does not exist: $input_dir" >&2
+    exit 1
+fi
+
+if [[ ! -x "$parser" ]]; then
+    echo "skp_parser is not executable: $parser" >&2
+    echo "Build it with: ninja -C out/Debug skp_parser" >&2
+    exit 1
+fi
+
+mkdir -p "$output_dir"
+
+found=false
+while IFS= read -r -d '' skp; do
+    found=true
+    relative_path=${skp#"$input_dir"/}
+    json_path="$output_dir/${relative_path%.skp}.json"
+    mkdir -p "$(dirname "$json_path")"
+    "$parser" "$skp" > "$json_path"
+    echo "$json_path"
+done < <(find "$input_dir" -type f -name '*.skp' -print0)
+
+if [[ "$found" == false ]]; then
+    echo "No .skp files found in: $input_dir" >&2
+    exit 1
+fi

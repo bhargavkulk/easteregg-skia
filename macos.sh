@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e -x
 
-SKP_DIR=${SKP_DIR:-bench100/skps}
-JSON_DIR=${JSON_DIR:-bench100/jsons}
+SKP_DIR=${SKP_DIR:-benchnext100/skps}
+JSON_DIR=${JSON_DIR:-benchnext100/jsons}
 SAMPLES=${SAMPLES:-100}
 
 if [ ! -d "out/Debug" ]; then
@@ -50,5 +50,5 @@ uv run python scripts/run_measurements.py \
     --backend grmtl \
     --cullmax "$CULLMAX"
 
-uv run python scripts/collate_data.py report --apple --cullmax "$CULLMAX"
-uv run python scripts/generate_html.py report --platform Apple
+PYTHONUNBUFFERED=1 uv run python scripts/collate_data.py report --apple --cullmax "$CULLMAX"
+PYTHONUNBUFFERED=1 uv run python scripts/generate_html.py report --platform Apple

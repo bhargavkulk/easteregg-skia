@@ -1,4 +1,5 @@
 import argparse
+import html
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,6 +76,11 @@ def format_confidence_interval(low: float, high: float) -> str:
     return f'[{format_float(low)}, {format_float(high)}]'
 
 
+def format_latex_macros(macros: dict[str, str]) -> str:
+    """Escape macro definitions for a read-only HTML textarea."""
+    return html.escape('\n'.join(macros.values()), quote=False)
+
+
 def format_stats(stats: dict[str, Any]) -> list[dict[str, str]]:
     total_benchmarks = stats['total_benchmarks']
     hottest_pass = stats['most_frequent_pass']
@@ -91,6 +97,10 @@ def format_stats(stats: dict[str, Any]) -> list[dict[str, str]]:
         {'label': 'Benchmark Count', 'value': str(total_benchmarks)},
         {'label': 'Baseline Geomean', 'value': format_float(stats['bl_geomean'])},
         {'label': 'Easteregg Geomean', 'value': format_float(stats['ee_geomean'])},
+        {
+            'label': 'Max Total Speedup',
+            'value': format_float(stats['max_total_speedup']),
+        },
         {
             'label': 'Benchmarks With Speedups',
             'value': format_count_ratio(stats['speedup_count'], total_benchmarks),
@@ -124,6 +134,7 @@ def collate_stats(stats_by_backend: dict[str, dict[str, Any]]) -> list[dict[str,
         'Benchmark Count',
         'Baseline Geomean',
         'Easteregg Geomean',
+        'Max Total Speedup',
         'Benchmarks With Speedups',
         'Speedups With Rewrites',
         'Benchmarks With Slowdowns',
@@ -217,11 +228,11 @@ def write_total_speedup_cdf(
     ax.set_title(
         f'Empirical CDF of Total Speedup\n(on {backend}/{platform}, N = {len(results)})'
     )
-    ax.set_xlabel('Total speedup (baseline / (optimized + opt))')
+    ax.set_xlabel('Total speedup (baseline / (optimized + optimization time))')
     ax.set_ylabel('Fraction of benchmarks ≤ x')
     ax.set_ylim(0, 1)
-    png_path = assets_dir / 'speedup_cdf.png'
-    svg_path = assets_dir / 'speedup_cdf.svg'
+    png_path = assets_dir / 'total_speedup_cdf.png'
+    svg_path = assets_dir / 'total_speedup_cdf.svg'
     fig.savefig(png_path, dpi=160)
     fig.savefig(svg_path)
     plt.close(fig)
@@ -248,7 +259,7 @@ def write_runtime_scatter(
         f'Command Count vs Optimization Time\n(on {backend}/{platform}, N = {len(results)})'
     )
     ax.set_xlabel('Number of commands')
-    ax.set_ylabel('Optimization time (ms)')
+    ax.set_ylabel('Optimization time (μs)')
     png_path = assets_dir / 'runtime_scatter.png'
     svg_path = assets_dir / 'runtime_scatter.svg'
     fig.savefig(png_path, dpi=160)
@@ -343,6 +354,7 @@ def write_report(report_dir: Path, title: str, backend: str, platform: str) -> N
     html = template.render(
         title=title,
         stats=format_stats(data['stats']),
+        latex_macros=format_latex_macros(data.get('latex_macros', {})),
         speedup_cdf_path=cdf_png_path,
         speedup_cdf_svg_path=cdf_svg_path,
         total_speedup_cdf_path=total_cdf_png_path,
