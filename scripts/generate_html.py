@@ -259,7 +259,7 @@ def write_runtime_scatter(
         f'Command Count vs Optimization Time\n(on {backend}/{platform}, N = {len(results)})'
     )
     ax.set_xlabel('Number of commands')
-    ax.set_ylabel('Optimization time (μs)')
+    ax.set_ylabel('Optimization time (ms)')
     png_path = assets_dir / 'runtime_scatter.png'
     svg_path = assets_dir / 'runtime_scatter.svg'
     fig.savefig(png_path, dpi=160)
@@ -281,8 +281,8 @@ def write_speedup_forest_plot(
         dtype=bool,
     )
 
-    fig_height = max(5.0, min(12.0, 0.12 * len(sorted_results) + 1.5))
-    fig, ax = plt.subplots(figsize=(8, fig_height), layout='constrained')
+    # Match the square CDF plots so this figure can be placed beside them.
+    fig, ax = plt.subplots(figsize=(5, 5), layout='constrained')
 
     for is_rewrite, color, marker, label in (
         (False, '#4c78a8', 'o', 'No Rewrite'),
@@ -304,10 +304,11 @@ def write_speedup_forest_plot(
             y_values,
             xerr=np.vstack([speedups - ci_lows, ci_highs - speedups]),
             fmt=marker,
-            markersize=5.5,
-            capsize=2,
-            linewidth=1.2,
+            markersize=3.5,
+            capsize=1.5,
+            linewidth=0.9,
             color=color,
+            ecolor=matplotlib.colors.to_rgba(color, alpha=0.45),
             label=label,
         )
 
@@ -323,7 +324,6 @@ def write_speedup_forest_plot(
     ax.set_yticklabels([])
     ax.tick_params(axis='y', length=0)
     ax.grid(axis='x', linestyle=':', linewidth=0.8, alpha=0.7)
-    ax.invert_yaxis()
     ax.legend(loc='best')
 
     png_path = assets_dir / 'speedup_forest.png'

@@ -2,6 +2,7 @@
 set -e -x
 
 export PATH="$PATH:/home/nightlies/.local/bin"
+export GIT_SYNC_DEPS_SKIP_EMSDK=1
 
 DISPLAY_NUMBER=${DISPLAY_NUMBER:-99}
 export DISPLAY=":$DISPLAY_NUMBER"

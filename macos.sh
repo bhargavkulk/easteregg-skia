@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 set -e -x
 
-SKP_DIR=${SKP_DIR:-benchnext100/skps}
-JSON_DIR=${JSON_DIR:-benchnext100/jsons}
+export GIT_SYNC_DEPS_SKIP_EMSDK=1
+
+SKP_DIR=${SKP_DIR:-bench100/skps}
+JSON_DIR=${JSON_DIR:-bench100/jsons}
 SAMPLES=${SAMPLES:-100}
 
 if [ ! -d "out/Debug" ]; then
     python3 tools/git-sync-deps
 fi
 
-#./bin/gn gen out/Debug --args='skia_enable_graphite=true skia_use_metal=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
-#ninja -C out/Debug optimizer nanobench renderer_opt optimizer_stdout optbench backend_limit
+# ./bin/gn gen out/Debug --args='target_cpu="arm64" skia_enable_graphite=true skia_use_metal=true cc="clang" cxx="clang++" extra_cflags=["-O3","-flto=thin"] extra_ldflags=["-flto=thin"]'
+# ninja -C out/Debug optimizer nanobench renderer_opt optimizer_stdout optbench backend_limit
 
 rm -rf opt report
 mkdir -p opt
@@ -39,7 +41,8 @@ uv run python scripts/run_measurements.py \
     report/ganesh \
     --samples "$SAMPLES" \
     --backend gl \
-    --cullmax "$CULLMAX"
+    --cullmax "$CULLMAX" \
+    --nanobench-runs 1
 
 uv run python scripts/run_measurements.py \
     "$SKP_DIR" \
@@ -48,7 +51,8 @@ uv run python scripts/run_measurements.py \
     report/graphite \
     --samples "$SAMPLES" \
     --backend grmtl \
-    --cullmax "$CULLMAX"
+    --cullmax "$CULLMAX" \
+    --nanobench-runs 1
 
 PYTHONUNBUFFERED=1 uv run python scripts/collate_data.py report --apple --cullmax "$CULLMAX"
 PYTHONUNBUFFERED=1 uv run python scripts/generate_html.py report --platform Apple

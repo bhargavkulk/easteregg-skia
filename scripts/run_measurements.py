@@ -1,5 +1,6 @@
 import argparse
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ class Args:
     nanobench_runs: int
     backend: str
     cullmax: int
+    resume: bool
 
 
 def parse_args() -> Args:
@@ -27,6 +29,11 @@ def parse_args() -> Args:
     parser.add_argument('--nanobench-runs', type=int, default=25)
     parser.add_argument('--backend', default='gl')
     parser.add_argument('--cullmax', type=int, default=0)
+    parser.add_argument(
+        '--resume',
+        action='store_true',
+        help='skip benchmarks with complete reports and restart incomplete benchmarks',
+    )
     return Args(**vars(parser.parse_args()))
 
 
@@ -74,6 +81,49 @@ def run_optimizer_stdout(skp: Path) -> dict[str, int]:
     ]
     result = subprocess.run(command, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)['passes']
+
+
+def nanobench_report_is_valid(path: Path) -> bool:
+    """Return whether path contains a non-empty nanobench JSON report."""
+    if not path.is_file() or path.stat().st_size == 0:
+        return False
+
+    try:
+        with path.open(encoding='utf-8') as fp:
+            report = json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    return isinstance(report, dict) and bool(report.get('results'))
+
+
+def benchmark_is_complete(
+    nanobench_root: Path,
+    stem: str,
+    nanobench_runs: int,
+    baseline: Path,
+    optimized: Path,
+    baseline_png: Path,
+    optimized_png: Path,
+) -> bool:
+    """Check that all requested reports and rendered outputs exist for one benchmark."""
+    if not baseline.is_file() or not optimized.is_file():
+        return False
+    if not baseline_png.is_file() or not optimized_png.is_file():
+        return False
+
+    run_dir = nanobench_root / stem
+    return all(
+        nanobench_report_is_valid(run_dir / f'run_{run_index:03d}.json')
+        for run_index in range(nanobench_runs)
+    )
+
+
+def reset_benchmark_reports(nanobench_root: Path, stem: str):
+    """Remove prior reports so an incomplete benchmark restarts at run zero."""
+    run_dir = nanobench_root / stem
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
 
 
 def run_nanobench(skps: list[Path], result: Path, clip: str, samples: int, backend: str):
@@ -156,6 +206,24 @@ def main():
 
         bl_output: Path = args.opt_dir / f'{stem}.skp'
         ee_output: Path = args.opt_dir / f'{stem}__ee.skp'
+        bl_png: Path = pngs / f'{stem}.png'
+        ee_png: Path = pngs / f'{stem}__ee.png'
+
+        if args.resume and benchmark_is_complete(
+            nanobench_results,
+            stem,
+            args.nanobench_runs,
+            bl_output,
+            ee_output,
+            bl_png,
+            ee_png,
+        ):
+            print(f'[*] resume: skipping complete benchmark {stem}')
+            continue
+
+        if args.resume:
+            reset_benchmark_reports(nanobench_results, stem)
+            print(f'[*] resume: restarting benchmark {stem}')
 
         run_optimizer(skp, bl_output, 'none')
         run_optimizer(skp, ee_output, 'easteregg')
@@ -174,9 +242,6 @@ def main():
                 args.samples,
                 args.backend,
             )
-
-        bl_png: Path = pngs / f'{stem}.png'
-        ee_png: Path = pngs / f'{stem}__ee.png'
 
         run_renderer(
             skp, bl_png, opt=False, transform='none', backend=args.backend, cullmax=args.cullmax
