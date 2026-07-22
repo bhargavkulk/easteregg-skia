@@ -8,8 +8,8 @@ DISPLAY_NUMBER=${DISPLAY_NUMBER:-99}
 export DISPLAY=":$DISPLAY_NUMBER"
 XORG_PID=""
 
-SKP_DIR=${SKP_DIR:-bench100/skps}
-JSON_DIR=${JSON_DIR:-bench100/jsons}
+SKP_DIR=${SKP_DIR:-benchnext100/skps}
+JSON_DIR=${JSON_DIR:-benchnext100/jsons}
 SAMPLES=${SAMPLES:-100}
 
 XORG_LOG=${XORG_LOG:-report/Xorg-$DISPLAY_NUMBER.log}
