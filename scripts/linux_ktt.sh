@@ -32,7 +32,7 @@ trap stop_xorg EXIT
 start_xorg
 
 ./out/Debug/optimizer \
-    --input bench100/skps/pinterest.com__layer_966.skp \
+    --input bench100/skps/pinterest.com__layer_66.skp \
     --output scratch/pinterest.com__layer_66__opt.skp \
     --transform easteregg
 
